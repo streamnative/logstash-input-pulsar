@@ -42,4 +42,13 @@ input{
 ```
 
 
+# Installation
 
+1. Get the latest zip file from release page.
+https://github.com/streamnative/logstash-input-pulsar/releases
+
+2. Install this plugin using logstash preoffline command.
+
+```
+bin/logstash-plugin install file://{PATH_TO}/logstash-input-pulsar-2.7.1.zip
+```
