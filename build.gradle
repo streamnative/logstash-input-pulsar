@@ -52,8 +52,7 @@ dependencies {
     compile 'org.apache.logging.log4j:log4j-core:2.13.3'
     compile 'org.apache.logging.log4j:log4j-api:2.13.3'
     compile 'org.apache.pulsar:pulsar-client:2.7.1'
-    //implementation fileTree(dir: LOGSTASH_CORE_PATH, include: "**/logstash-core-?.?.?.jar")
-    implementation files('/Users/rockybean/code/logstash-7.11/logstash-core/build/libs/logstash-core-7.11.3.jar')
+    implementation files(LOGSTASH_CORE_PATH + '../logstash-core/build/libs/logstash-core-7.11.3.jar')
 
     testCompile 'junit:junit:4.12'
     testImplementation 'org.jruby:jruby-complete:9.1.13.0'
