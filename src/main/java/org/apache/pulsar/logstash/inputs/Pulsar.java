@@ -46,7 +46,7 @@ public class Pulsar implements Input {
     // consumer config list
 
     // codec, plain, json
-    private String codec;
+    private final String codec;
     private static final String CODEC_PLAIN = "plain";
     private static final String CODEC_JSON = "json";
     private static final PluginConfigSpec<String> CONFIG_CODEC =
