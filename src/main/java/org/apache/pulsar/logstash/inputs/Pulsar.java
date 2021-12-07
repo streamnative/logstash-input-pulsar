@@ -9,10 +9,10 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.pulsar.client.api.ConsumerBuilder;
 import org.apache.pulsar.client.api.Message;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
-import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.api.SubscriptionInitialPosition;
 import org.apache.pulsar.client.api.SubscriptionType;
 
@@ -32,14 +32,14 @@ public class Pulsar implements Input {
 
     private final static Logger logger = LogManager.getLogger(Pulsar.class);
 
-    private String id;
+    private final String id;
     private final CountDownLatch done = new CountDownLatch(1);
     private volatile boolean stopped;
 
     private PulsarClient client;
-    private org.apache.pulsar.client.api.Consumer pulsarConsumer;
+    private org.apache.pulsar.client.api.Consumer<byte[]> pulsarConsumer;
 
-    private String serviceUrl;
+    private final String serviceUrl;
     private static final PluginConfigSpec<String> CONFIG_SERVICE_URL =
             PluginConfigSpec.stringSetting("serviceUrl", "pulsar://localhost:6650");
 
@@ -53,27 +53,27 @@ public class Pulsar implements Input {
             PluginConfigSpec.stringSetting("codec", CODEC_PLAIN);
 
     // topic Names, array
-    private List<String> topics;
+    private final List<String> topics;
     private static final PluginConfigSpec<List<Object>> CONFIG_TOPICS =
             PluginConfigSpec.arraySetting("topics", null, false, true);
 
     // subscription name
-    private String subscriptionName;
+    private final String subscriptionName;
     private static final PluginConfigSpec<String> CONFIG_SUBSCRIPTION_NAME =
             PluginConfigSpec.requiredStringSetting("subscriptionName");
 
     // consumer name
-    private String consumerName;
+    private final String consumerName;
     private static final PluginConfigSpec<String> CONFIG_CONSUMER_NAME =
             PluginConfigSpec.stringSetting("consumerName");
 
     // subscription type: Exclusive,Failover,Shared,Key_shared
-    private String subscriptionType;
+    private final String subscriptionType;
     private static final PluginConfigSpec<String> CONFIG_SUBSCRIPTION_TYPE =
             PluginConfigSpec.stringSetting("subscriptionType", "Shared");
 
     // subscription initial position: Latest,Earliest
-    private String subscriptionInitialPosition;
+    private final String subscriptionInitialPosition;
     private static final PluginConfigSpec<String> CONFIG_SUBSCRIPTION_INITIAL_POSITION =
             PluginConfigSpec.stringSetting("subscriptionInitialPosition", "Latest");
 
@@ -101,13 +101,15 @@ public class Pulsar implements Input {
                     .build();
 
             // Create a consumer
-            pulsarConsumer = client.newConsumer()
+            ConsumerBuilder<byte[]> consumerBuilder = client.newConsumer()
                     .topics(topics)
                     .subscriptionName(subscriptionName)
-                    //.consumerName(consumerName)
                     .subscriptionType(getSubscriptionType())
-                    .subscriptionInitialPosition(getSubscriptionInitialPosition())
-                    .subscribe();
+                    .subscriptionInitialPosition(getSubscriptionInitialPosition());
+            if (consumerName != null) {
+                consumerBuilder.consumerName(consumerName);
+            }
+            pulsarConsumer = consumerBuilder.subscribe();
             logger.info("Create subscription {} on topics {} with codec {}, consumer name is {},subscription Type is {},subscriptionInitialPosition is {}", subscriptionName, topics, codec , consumerName, subscriptionType, subscriptionInitialPosition);
 
         } catch (PulsarClientException e) {
@@ -117,7 +119,7 @@ public class Pulsar implements Input {
     }
 
     private SubscriptionInitialPosition getSubscriptionInitialPosition() {
-        SubscriptionInitialPosition position = SubscriptionInitialPosition.Latest;
+        SubscriptionInitialPosition position;
         switch (subscriptionInitialPosition) {
             case "Latest":
                 position = SubscriptionInitialPosition.Latest;
@@ -126,6 +128,7 @@ public class Pulsar implements Input {
                 position = SubscriptionInitialPosition.Earliest;
                 break;
             default:
+                position = SubscriptionInitialPosition.Latest;
                 logger.warn("{} is not one known subscription initial position! 'Latest' will be used! [Latest,Earliest]", subscriptionInitialPosition);
 
         }
@@ -133,7 +136,7 @@ public class Pulsar implements Input {
     }
 
     private SubscriptionType getSubscriptionType() {
-        SubscriptionType type = SubscriptionType.Shared;
+        SubscriptionType type;
         switch (subscriptionType) {
             case "Exclusive":
                 type = SubscriptionType.Exclusive;
@@ -148,6 +151,7 @@ public class Pulsar implements Input {
                 type = SubscriptionType.Key_Shared;
                 break;
             default:
+                type = SubscriptionType.Shared;
                 logger.warn("{} is not one known subscription type! 'Shared' type will be used! [Exclusive,Failover,Shared,Key_Shared]", subscriptionType);
         }
         return type;
@@ -198,7 +202,7 @@ public class Pulsar implements Input {
                             // json parse exception
                             // treat it as codec plain
                             logger.error("json parse exception ", e);
-                            logger.error("message key is {}, set logging level to debug if you'd like to see message", message.getKey(), msgString);
+                            logger.error("message key is {}, set logging level to debug if you'd like to see message", message.getKey());
                             logger.debug("message content is {}", msgString);
                             logger.error("default codec plain will be used ");
 
