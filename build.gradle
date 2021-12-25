@@ -48,9 +48,9 @@ shadowJar {
 }
 
 dependencies {
-    implementation 'org.apache.logging.log4j:log4j-core:2.14.1'
-    implementation 'org.apache.logging.log4j:log4j-api:2.14.1'
-    implementation 'org.apache.pulsar:pulsar-client:2.9.0'
+    implementation 'org.apache.logging.log4j:log4j-core:2.17.0'
+    implementation 'org.apache.logging.log4j:log4j-api:2.17.0'
+    implementation 'org.apache.pulsar:pulsar-client:2.9.1'
     implementation 'com.google.code.gson:gson:2.8.9'
     implementation files(LOGSTASH_CORE_PATH + '/../logstash-core/build/libs/logstash-core-7.15.2.jar')
 
