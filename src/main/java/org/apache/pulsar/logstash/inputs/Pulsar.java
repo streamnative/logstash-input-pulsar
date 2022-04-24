@@ -15,13 +15,18 @@ import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionInitialPosition;
 import org.apache.pulsar.client.api.SubscriptionType;
+import org.apache.pulsar.client.impl.auth.AuthenticationKeyStoreTls;
 
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -39,66 +44,126 @@ public class Pulsar implements Input {
     private PulsarClient client;
     private org.apache.pulsar.client.api.Consumer<byte[]> pulsarConsumer;
 
-    private final String serviceUrl;
     private static final PluginConfigSpec<String> CONFIG_SERVICE_URL =
             PluginConfigSpec.stringSetting("serviceUrl", "pulsar://localhost:6650");
+
+    // base config
+    private Configuration config;
 
     // consumer config list
 
     // codec, plain, json
-    private final String codec;
     private static final String CODEC_PLAIN = "plain";
     private static final String CODEC_JSON = "json";
     private static final PluginConfigSpec<String> CONFIG_CODEC =
             PluginConfigSpec.stringSetting("codec", CODEC_PLAIN);
 
     // topic Names, array
-    private final List<String> topics;
     private static final PluginConfigSpec<List<Object>> CONFIG_TOPICS =
             PluginConfigSpec.arraySetting("topics", null, false, true);
 
     // subscription name
-    private final String subscriptionName;
     private static final PluginConfigSpec<String> CONFIG_SUBSCRIPTION_NAME =
             PluginConfigSpec.requiredStringSetting("subscriptionName");
 
     // consumer name
-    private final String consumerName;
     private static final PluginConfigSpec<String> CONFIG_CONSUMER_NAME =
             PluginConfigSpec.stringSetting("consumerName");
 
     // subscription type: Exclusive,Failover,Shared,Key_shared
-    private final String subscriptionType;
     private static final PluginConfigSpec<String> CONFIG_SUBSCRIPTION_TYPE =
             PluginConfigSpec.stringSetting("subscriptionType", "Shared");
 
     // subscription initial position: Latest,Earliest
-    private final String subscriptionInitialPosition;
     private static final PluginConfigSpec<String> CONFIG_SUBSCRIPTION_INITIAL_POSITION =
             PluginConfigSpec.stringSetting("subscriptionInitialPosition", "Latest");
 
     // TODO: support     decorate_events => true &     consumer_threads => 2 & metadata
 
+    // TLS Config
+    private static final String authPluginClassName = "org.apache.pulsar.client.impl.auth.AuthenticationKeyStoreTls";
+    private static final List<String> protocols = Arrays.asList("TLSv1.2");
+    private static final List<String> ciphers = Arrays.asList(
+            "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+            "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+            "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+            "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+    );
+
+    private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_TLS =
+            PluginConfigSpec.booleanSetting("enable_tls",false);
+
+    private static final PluginConfigSpec<Boolean> CONFIG_ALLOW_TLS_INSECURE_CONNECTION =
+            PluginConfigSpec.booleanSetting("allow_tls_insecure_connection",false);
+
+    private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION =
+            PluginConfigSpec.booleanSetting("enable_tls_hostname_verification",true);
+
+    private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PATH =
+            PluginConfigSpec.stringSetting("tls_trust_store_path","");
+
+    private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PASSWORD =
+            PluginConfigSpec.stringSetting("tls_trust_store_password","");
+
+    private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN_CLASS_NAME =
+            PluginConfigSpec.stringSetting("auth_plugin_class_name",authPluginClassName);
+
+    private static final PluginConfigSpec<List<Object>> CONFIG_CIPHERS =
+            PluginConfigSpec.arraySetting("ciphers", Collections.singletonList(ciphers), false, false);
+
+    private static final PluginConfigSpec<List<Object>> CONFIG_PROTOCOLS =
+            PluginConfigSpec.arraySetting("protocols", Collections.singletonList(protocols), false, false);
+
     public Pulsar(String id, Configuration config, Context context) {
         // constructors should validate configuration options
         this.id = id;
-
-        serviceUrl = config.get(CONFIG_SERVICE_URL);
-
-        codec = config.get(CONFIG_CODEC);
-        topics = config.get(CONFIG_TOPICS).stream().map(Object::toString).collect(Collectors.toList());
-        subscriptionName = config.get(CONFIG_SUBSCRIPTION_NAME);
-        consumerName = config.get(CONFIG_CONSUMER_NAME);
-        subscriptionType = config.get(CONFIG_SUBSCRIPTION_TYPE);
-        subscriptionInitialPosition = config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION);
+        this.config = config;
     }
 
     private void createConsumer() throws PulsarClientException {
         try {
+            String serviceUrl = config.get(CONFIG_SERVICE_URL);
 
-            client = PulsarClient.builder()
-                    .serviceUrl(serviceUrl)
-                    .build();
+            String codec = config.get(CONFIG_CODEC);
+            List<String> topics = config.get(CONFIG_TOPICS).stream().map(Object::toString).collect(Collectors.toList());
+            String subscriptionName = config.get(CONFIG_SUBSCRIPTION_NAME);
+            String consumerName = config.get(CONFIG_CONSUMER_NAME);
+            String subscriptionType = config.get(CONFIG_SUBSCRIPTION_TYPE);
+            String subscriptionInitialPosition = config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION);
+            boolean enableTls = config.get(CONFIG_ENABLE_TLS);
+            if (enableTls) {
+                // pulsar TLS
+                Boolean allowTlsInsecureConnection = config.get(CONFIG_ALLOW_TLS_INSECURE_CONNECTION);
+                Boolean enableTlsHostnameVerification = config.get(CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION);
+                String tlsTrustStorePath = config.get(CONFIG_TLS_TRUST_STORE_PATH);
+                Map<String, String> authMap = new HashMap<>();
+                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_TYPE, "JKS");
+                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PATH, tlsTrustStorePath);
+                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PW, config.get(CONFIG_TLS_TRUST_STORE_PASSWORD));
+
+                Set<String> cipherSet = new HashSet<>();
+                Optional.ofNullable(config.get(CONFIG_CIPHERS)).ifPresent(
+                        cipherList -> cipherList.forEach(cipher -> cipherSet.add(String.valueOf(cipher))));
+
+                Set<String> protocolSet = new HashSet<>();
+                Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
+                        protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
+
+                client = PulsarClient.builder()
+                        .serviceUrl(serviceUrl)
+                        .tlsCiphers(cipherSet)
+                        .tlsProtocols(protocolSet)
+                        .allowTlsInsecureConnection(allowTlsInsecureConnection)
+                        .enableTlsHostnameVerification(enableTlsHostnameVerification)
+                        .tlsTrustStorePath(tlsTrustStorePath)
+                        .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD))
+                        .authentication(config.get(CONFIG_AUTH_PLUGIN_CLASS_NAME),authMap)
+                        .build();
+            } else {
+                client = PulsarClient.builder()
+                        .serviceUrl(serviceUrl)
+                        .build();
+            }
 
             // Create a consumer
             ConsumerBuilder<byte[]> consumerBuilder = client.newConsumer()
@@ -120,7 +185,7 @@ public class Pulsar implements Input {
 
     private SubscriptionInitialPosition getSubscriptionInitialPosition() {
         SubscriptionInitialPosition position;
-        switch (subscriptionInitialPosition) {
+        switch (config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION)) {
             case "Latest":
                 position = SubscriptionInitialPosition.Latest;
                 break;
@@ -129,7 +194,7 @@ public class Pulsar implements Input {
                 break;
             default:
                 position = SubscriptionInitialPosition.Latest;
-                logger.warn("{} is not one known subscription initial position! 'Latest' will be used! [Latest,Earliest]", subscriptionInitialPosition);
+                logger.warn("{} is not one known subscription initial position! 'Latest' will be used! [Latest,Earliest]", config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION));
 
         }
         return position;
@@ -137,7 +202,7 @@ public class Pulsar implements Input {
 
     private SubscriptionType getSubscriptionType() {
         SubscriptionType type;
-        switch (subscriptionType) {
+        switch (config.get(CONFIG_SUBSCRIPTION_TYPE)) {
             case "Exclusive":
                 type = SubscriptionType.Exclusive;
                 break;
@@ -152,7 +217,8 @@ public class Pulsar implements Input {
                 break;
             default:
                 type = SubscriptionType.Shared;
-                logger.warn("{} is not one known subscription type! 'Shared' type will be used! [Exclusive,Failover,Shared,Key_Shared]", subscriptionType);
+                logger.warn("{} is not one known subscription type! 'Shared' type will be used! [Exclusive,Failover,Shared,Key_Shared]",
+                        config.get(CONFIG_SUBSCRIPTION_TYPE));
         }
         return type;
     }
@@ -194,7 +260,7 @@ public class Pulsar implements Input {
                     }
                     msgString = new String(message.getData());
 
-                    if (codec.equals(CODEC_JSON)) {
+                    if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
                         try {
                             Map map = gson.fromJson(msgString, gsonType);
                             consumer.accept(map);
