@@ -97,7 +97,7 @@ public class Pulsar implements Input {
             PluginConfigSpec.booleanSetting("allow_tls_insecure_connection",false);
 
     private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION =
-            PluginConfigSpec.booleanSetting("enable_tls_hostname_verification",true);
+            PluginConfigSpec.booleanSetting("enable_tls_hostname_verification",false);
 
     private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PATH =
             PluginConfigSpec.stringSetting("tls_trust_store_path","");
@@ -322,7 +322,17 @@ public class Pulsar implements Input {
                 CONFIG_SUBSCRIPTION_TYPE,
                 CONFIG_SUBSCRIPTION_INITIAL_POSITION,
                 CONFIG_CONSUMER_NAME,
-                CONFIG_CODEC
+                CONFIG_CODEC,
+
+                // Pulsar TLS Config
+                CONFIG_ENABLE_TLS,
+                CONFIG_TLS_TRUST_STORE_PATH,
+                CONFIG_TLS_TRUST_STORE_PASSWORD,
+                CONFIG_PROTOCOLS,
+                CONFIG_AUTH_PLUGIN_CLASS_NAME,
+                CONFIG_ALLOW_TLS_INSECURE_CONNECTION,
+                CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION,
+                CONFIG_CIPHERS
         );
     }
 
