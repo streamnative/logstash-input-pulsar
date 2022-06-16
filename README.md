@@ -13,15 +13,22 @@ If you require features not yet available in this plugin (including client versi
 # Pulsar Input Configuration Options
 This plugin supports these configuration options. 
 
-| Settings    | Input type     | Required  |
-| ------------- |:-------------:| -----:|
-| codec      | string, one of ["plain","json"] | No |
-| topics      | array | Yes |
-| subscriptionName      | string | Yes |
-| consumerName      | string | No |
-| subscriptionType      | string, one of["Shared","Exclusive","Failover","Key_shared"] | No |
-| subscriptionInitialPosition| string, one of["Latest","Earliest"] | No |
-
+| Settings                         |                          Input type                          | Required |
+|----------------------------------|:------------------------------------------------------------:|---------:|
+| codec                            |               string, one of ["plain","json"]                |       No |
+| topics                           |                            array                             |      Yes |
+| subscriptionName                 |                            string                            |      Yes |
+| consumerName                     |                            string                            |       No |
+| subscriptionType                 | string, one of["Shared","Exclusive","Failover","Key_shared"] |       No |
+| subscriptionInitialPosition      |             string, one of["Latest","Earliest"]              |       No |
+| enable_tls                       |       boolean, one of [true, false]. default is false        |       No |
+| tls_trust_store_path             |        string, required if enable_tls is set to true         |       No |
+| tls_trust_store_password         |                   string, default is empty                   |       No |
+| enable_tls_hostname_verification |       boolean, one of [true, false]. default is false        |       No |
+| protocols                        |           array, ciphers list. default is TLSv1.2            |       No |
+| allow_tls_insecure_connection    |        boolean, one of [true, false].default is false        |       No |
+| auth_plugin_class_name           |                            string                            |       No |
+| ciphers                          |                     array, ciphers list                      |       No |
 
 # Example
 
@@ -50,5 +57,5 @@ https://github.com/streamnative/logstash-input-pulsar/releases
 2. Install this plugin using logstash preoffline command.
 
 ```
-bin/logstash-plugin install file://{PATH_TO}/logstash-input-pulsar-2.7.1.zip
+bin/logstash-plugin install file://{PATH_TO}/logstash-input-pulsar-2.9.0.1.zip
 ```
