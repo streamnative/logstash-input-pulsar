@@ -82,8 +82,8 @@ public class Pulsar implements Input {
 
     // TLS Config
     private static final String authPluginClassName = "org.apache.pulsar.client.impl.auth.AuthenticationKeyStoreTls";
-    private static final List<String> protocols = Arrays.asList("TLSv1.2");
-    private static final List<String> ciphers = Arrays.asList(
+    private static final List<Object> protocols = Arrays.asList("TLSv1.2");
+    private static final List<Object> ciphers = Arrays.asList(
             "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
             "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
             "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
@@ -97,7 +97,7 @@ public class Pulsar implements Input {
             PluginConfigSpec.booleanSetting("allow_tls_insecure_connection",false);
 
     private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION =
-            PluginConfigSpec.booleanSetting("enable_tls_hostname_verification",true);
+            PluginConfigSpec.booleanSetting("enable_tls_hostname_verification",false);
 
     private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PATH =
             PluginConfigSpec.stringSetting("tls_trust_store_path","");
@@ -105,14 +105,20 @@ public class Pulsar implements Input {
     private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PASSWORD =
             PluginConfigSpec.stringSetting("tls_trust_store_password","");
 
+    private static final PluginConfigSpec<String> CONFIG_TLS_KEY_STORE_PATH =
+            PluginConfigSpec.stringSetting("tls_key_store_path", "");
+
+    private static final PluginConfigSpec<String> CONFIG_TLS_KEY_STORE_PASSWORD =
+            PluginConfigSpec.stringSetting("tls_key_store_password", "");
+
     private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN_CLASS_NAME =
             PluginConfigSpec.stringSetting("auth_plugin_class_name",authPluginClassName);
 
     private static final PluginConfigSpec<List<Object>> CONFIG_CIPHERS =
-            PluginConfigSpec.arraySetting("ciphers", Collections.singletonList(ciphers), false, false);
+            PluginConfigSpec.arraySetting("ciphers", ciphers, false, false);
 
     private static final PluginConfigSpec<List<Object>> CONFIG_PROTOCOLS =
-            PluginConfigSpec.arraySetting("protocols", Collections.singletonList(protocols), false, false);
+            PluginConfigSpec.arraySetting("protocols", protocols, false, false);
 
     public Pulsar(String id, Configuration config, Context context) {
         // constructors should validate configuration options
@@ -123,6 +129,13 @@ public class Pulsar implements Input {
     private void createConsumer() throws PulsarClientException {
         try {
             String serviceUrl = config.get(CONFIG_SERVICE_URL);
+            boolean enableTls = config.get(CONFIG_ENABLE_TLS);
+            if (enableTls) {
+                // pulsar TLS
+                client = buildTlsPulsarClient(serviceUrl);
+            } else {
+                client = buildNotTlsPulsarClient(serviceUrl);
+            }
 
             String codec = config.get(CONFIG_CODEC);
             List<String> topics = config.get(CONFIG_TOPICS).stream().map(Object::toString).collect(Collectors.toList());
@@ -130,41 +143,6 @@ public class Pulsar implements Input {
             String consumerName = config.get(CONFIG_CONSUMER_NAME);
             String subscriptionType = config.get(CONFIG_SUBSCRIPTION_TYPE);
             String subscriptionInitialPosition = config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION);
-            boolean enableTls = config.get(CONFIG_ENABLE_TLS);
-            if (enableTls) {
-                // pulsar TLS
-                Boolean allowTlsInsecureConnection = config.get(CONFIG_ALLOW_TLS_INSECURE_CONNECTION);
-                Boolean enableTlsHostnameVerification = config.get(CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION);
-                String tlsTrustStorePath = config.get(CONFIG_TLS_TRUST_STORE_PATH);
-                Map<String, String> authMap = new HashMap<>();
-                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_TYPE, "JKS");
-                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PATH, tlsTrustStorePath);
-                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PW, config.get(CONFIG_TLS_TRUST_STORE_PASSWORD));
-
-                Set<String> cipherSet = new HashSet<>();
-                Optional.ofNullable(config.get(CONFIG_CIPHERS)).ifPresent(
-                        cipherList -> cipherList.forEach(cipher -> cipherSet.add(String.valueOf(cipher))));
-
-                Set<String> protocolSet = new HashSet<>();
-                Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
-                        protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
-
-                client = PulsarClient.builder()
-                        .serviceUrl(serviceUrl)
-                        .tlsCiphers(cipherSet)
-                        .tlsProtocols(protocolSet)
-                        .allowTlsInsecureConnection(allowTlsInsecureConnection)
-                        .enableTlsHostnameVerification(enableTlsHostnameVerification)
-                        .tlsTrustStorePath(tlsTrustStorePath)
-                        .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD))
-                        .authentication(config.get(CONFIG_AUTH_PLUGIN_CLASS_NAME),authMap)
-                        .build();
-            } else {
-                client = PulsarClient.builder()
-                        .serviceUrl(serviceUrl)
-                        .build();
-            }
-
             // Create a consumer
             ConsumerBuilder<byte[]> consumerBuilder = client.newConsumer()
                     .topics(topics)
@@ -181,6 +159,47 @@ public class Pulsar implements Input {
             logger.error("pulsar client exception ", e);
             throw e;
         }
+    }
+
+    private PulsarClient buildNotTlsPulsarClient(String serviceUrl) throws PulsarClientException {
+        return PulsarClient.builder()
+                .serviceUrl(serviceUrl)
+                .build();
+    }
+
+    private PulsarClient buildTlsPulsarClient(String serviceUrl) throws PulsarClientException {
+        Boolean allowTlsInsecureConnection = config.get(CONFIG_ALLOW_TLS_INSECURE_CONNECTION);
+        Boolean enableTlsHostnameVerification = config.get(CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION);
+        String tlsTrustStorePath = config.get(CONFIG_TLS_TRUST_STORE_PATH);
+        String tlsTrustStorePassword = config.get(CONFIG_TLS_TRUST_STORE_PASSWORD);
+        String tlsKeyStorePath = config.get(CONFIG_TLS_KEY_STORE_PATH);
+        String tlsKeyStorePassword = config.get(CONFIG_TLS_KEY_STORE_PASSWORD);
+        String pluginClassName = config.get(CONFIG_AUTH_PLUGIN_CLASS_NAME);
+
+        Map<String, String> authMap = new HashMap<>();
+        authMap.put(AuthenticationKeyStoreTls.KEYSTORE_TYPE, "JKS");
+        authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PATH, tlsKeyStorePath);
+        authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PW, tlsKeyStorePassword);
+
+        Set<String> cipherSet = new HashSet<>();
+        Optional.ofNullable(config.get(CONFIG_CIPHERS)).ifPresent(
+                cipherList -> cipherList.forEach(cipher -> cipherSet.add(String.valueOf(cipher))));
+
+        Set<String> protocolSet = new HashSet<>();
+        Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
+                protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
+
+        return PulsarClient.builder()
+                .serviceUrl(serviceUrl)
+                .tlsCiphers(cipherSet)
+                .tlsProtocols(protocolSet)
+                .allowTlsInsecureConnection(allowTlsInsecureConnection)
+                .enableTlsHostnameVerification(enableTlsHostnameVerification)
+                .tlsTrustStorePath(tlsTrustStorePath)
+                .tlsTrustStorePassword(tlsTrustStorePassword)
+                .authentication(pluginClassName,authMap)
+                .useKeyStoreTls(true)
+                .build();
     }
 
     private SubscriptionInitialPosition getSubscriptionInitialPosition() {
@@ -322,7 +341,19 @@ public class Pulsar implements Input {
                 CONFIG_SUBSCRIPTION_TYPE,
                 CONFIG_SUBSCRIPTION_INITIAL_POSITION,
                 CONFIG_CONSUMER_NAME,
-                CONFIG_CODEC
+                CONFIG_CODEC,
+
+                // Pulsar TLS Config
+                CONFIG_ENABLE_TLS,
+                CONFIG_TLS_TRUST_STORE_PATH,
+                CONFIG_TLS_TRUST_STORE_PASSWORD,
+                CONFIG_TLS_KEY_STORE_PATH,
+                CONFIG_TLS_KEY_STORE_PASSWORD,
+                CONFIG_PROTOCOLS,
+                CONFIG_ALLOW_TLS_INSECURE_CONNECTION,
+                CONFIG_AUTH_PLUGIN_CLASS_NAME,
+                CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION,
+                CONFIG_CIPHERS
         );
     }
 
