@@ -59,5 +59,5 @@ bin/logstash-plugin install file://{PATH_TO}/logstash-input-pulsar-2.7.1.zip
 
 ```
 ./gradlew gem
-bin/logstash-plugin install --no-verify --local file://{PATH_TO}/llogstash-input-pulsar-2.10.0.0.gem
+bin/logstash-plugin install --no-verify --local file://{PATH_TO}/logstash-input-pulsar-2.10.0.0.gem
 ```
