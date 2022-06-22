@@ -116,7 +116,7 @@ public class Pulsar implements Input {
     private static final PluginConfigSpec<List<Object>> CONFIG_PROTOCOLS =
             PluginConfigSpec.arraySetting("protocols", Collections.singletonList(protocols), false, false);
 			
-	//http basic
+    //http basic
     private static final PluginConfigSpec<Boolean> ENALBE_BASIC =
             PluginConfigSpec.booleanSetting("enableBasic", false);
 			
@@ -129,8 +129,7 @@ public class Pulsar implements Input {
     public Pulsar(String id, Configuration config, Context context) {
         // constructors should validate configuration options
         this.id = id;
-        this.config = config;
-		
+        this.config = config;	
     }
 
     private void createConsumer() throws PulsarClientException {
@@ -145,9 +144,9 @@ public class Pulsar implements Input {
             String subscriptionInitialPosition = config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION);
             boolean enableTls = config.get(CONFIG_ENABLE_TLS);
 			
-			boolean  enableBasic=config.get(ENALBE_BASIC);;
-			String userId=config.get(USER_ID);;
-			String password= config.get(PASSWORD);
+	    boolean  enableBasic=config.get(ENALBE_BASIC);;
+	    String userId=config.get(USER_ID);;
+	    String password= config.get(PASSWORD);
 			
             if (enableTls) {
                 // pulsar TLS
@@ -178,20 +177,20 @@ public class Pulsar implements Input {
                         .authentication(config.get(CONFIG_AUTH_PLUGIN_CLASS_NAME),authMap)
                         .build();
             } 
-			else if (enableBasic){
-				//http basic authentication
-				Map<String, String> authMap = new HashMap<>();
-				authMap.put("userId", userId);
-				authMap.put("password", password);
-				AuthenticationBasic auth = new AuthenticationBasic();
-				auth.configure(authMap.toString());
-				client = PulsarClient.builder()
-						.serviceUrl(serviceUrl)
-						.authentication(auth)
-						.build();
-			}
-			else {
-                client = PulsarClient.builder()
+	    else if (enableBasic){
+		//http basic authentication
+		Map<String, String> authMap = new HashMap<>();
+		authMap.put("userId", userId);
+		authMap.put("password", password);
+		AuthenticationBasic auth = new AuthenticationBasic();
+		auth.configure(authMap.toString());
+		client = PulsarClient.builder()
+			.serviceUrl(serviceUrl)
+			.authentication(auth)
+			.build();
+	     }
+	     else {
+                 client = PulsarClient.builder()
                         .serviceUrl(serviceUrl)
                         .build();
             }
@@ -354,9 +353,10 @@ public class Pulsar implements Input {
                 CONFIG_SUBSCRIPTION_INITIAL_POSITION,
                 CONFIG_CONSUMER_NAME,
                 CONFIG_CODEC,
-				USER_ID,
-				PASSWORD,
-				ENALBE_BASIC
+		//http basic
+		USER_ID,
+		PASSWORD,
+		ENALBE_BASIC
         );
     }
 
