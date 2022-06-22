@@ -21,6 +21,9 @@ This plugin supports these configuration options.
 | consumerName      | string | No |
 | subscriptionType      | string, one of["Shared","Exclusive","Failover","Key_shared"] | No |
 | subscriptionInitialPosition| string, one of["Latest","Earliest"] | No |
+| enableBasic      | boolean，one of [true, false]. default is false | No |
+| userId      | string | No |
+| password      | string | No |
 
 
 # Example
@@ -51,4 +54,10 @@ https://github.com/streamnative/logstash-input-pulsar/releases
 
 ```
 bin/logstash-plugin install file://{PATH_TO}/logstash-input-pulsar-2.7.1.zip
+```
+3.packaging & installing
+
+```
+./gradlew gem
+bin/logstash-plugin install --no-verify --local file://{PATH_TO}/llogstash-input-pulsar-2.10.0.0.gem
 ```
