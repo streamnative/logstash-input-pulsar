@@ -18,6 +18,7 @@ import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.pulsar.client.impl.auth.AuthenticationKeyStoreTls;
 
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -60,7 +61,11 @@ public class Pulsar implements Input {
 
     // topic Names, array
     private static final PluginConfigSpec<List<Object>> CONFIG_TOPICS =
-            PluginConfigSpec.arraySetting("topics", null, false, true);
+            PluginConfigSpec.arraySetting("topics", new ArrayList<>(), false, false);
+
+    // topic Pattern, array
+    private static final PluginConfigSpec<String> CONFIG_TOPICS_PATTERN =
+            PluginConfigSpec.stringSetting("topics_pattern", null, false, false);
 
     // subscription name
     private static final PluginConfigSpec<String> CONFIG_SUBSCRIPTION_NAME =
@@ -143,12 +148,19 @@ public class Pulsar implements Input {
             String consumerName = config.get(CONFIG_CONSUMER_NAME);
             String subscriptionType = config.get(CONFIG_SUBSCRIPTION_TYPE);
             String subscriptionInitialPosition = config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION);
+            String topicsPattern = config.get(CONFIG_TOPICS_PATTERN);
             // Create a consumer
             ConsumerBuilder<byte[]> consumerBuilder = client.newConsumer()
-                    .topics(topics)
                     .subscriptionName(subscriptionName)
                     .subscriptionType(getSubscriptionType())
                     .subscriptionInitialPosition(getSubscriptionInitialPosition());
+            if (topicsPattern != null) {
+                logger.info("topics pattern : {}", topicsPattern);
+                consumerBuilder.topicsPattern(topicsPattern);
+            } else {
+                logger.info("topics : {}", topics);
+                consumerBuilder.topics(topics);
+            }
             if (consumerName != null) {
                 consumerBuilder.consumerName(consumerName);
             }
@@ -314,6 +326,7 @@ public class Pulsar implements Input {
 
             }
         } catch (PulsarClientException e) {
+            logger.error("create pulsar client error: {}", e.getMessage());
         } finally {
             stopped = true;
             done.countDown();
@@ -342,6 +355,7 @@ public class Pulsar implements Input {
                 CONFIG_SUBSCRIPTION_INITIAL_POSITION,
                 CONFIG_CONSUMER_NAME,
                 CONFIG_CODEC,
+                CONFIG_TOPICS_PATTERN,
 
                 // Pulsar TLS Config
                 CONFIG_ENABLE_TLS,
