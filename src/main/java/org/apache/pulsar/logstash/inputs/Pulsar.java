@@ -312,108 +312,96 @@ public class Pulsar implements Input {
         // events should loop indefinitely until they receive a stop request. Inputs that produce
         // a finite sequence of events should loop until that sequence is exhausted or until they
         // receive a stop request, whichever comes first.
-
-        if (!isBatchReceived) {
-            logger.info("start with single receive");
-            startWithSingleReceive(consumer);
-        } else {
-            logger.info("start with batch receive");
-            startWithBatchReceive(consumer);
+        try {
+            createConsumer();
+            if (!isBatchReceived) {
+                logger.info("start with single receive");
+                startWithSingleReceive(consumer);
+            } else {
+                logger.info("start with batch receive");
+                startWithBatchReceive(consumer);
+            }
+        } catch (PulsarClientException e) {
+            logger.error("create pulsar client error: {}", e.getMessage());
+        } finally {
+            stopped = true;
+            done.countDown();
         }
     }
 
     public void startWithSingleReceive(Consumer<Map<String, Object>> consumer) {
-        try {
-            createConsumer();
-            Message<byte[]> message = null;
-            String msgString = null;
-            Gson gson = new Gson();
-            Type gsonType = new TypeToken<Map>(){}.getType();
-            while (!stopped) {
-                try {
-                    // Block and wait until a single message is available
-                    message = pulsarConsumer.receive(1000, TimeUnit.MILLISECONDS);
-                    if(message == null){
-                        continue;
-                    }
-                    msgString = new String(message.getData());
+        Message<byte[]> message = null;
+        String msgString = null;
+        Gson gson = new Gson();
+        Type gsonType = new TypeToken<Map>(){}.getType();
+        while (!stopped) {
+            try {
+                // Block and wait until a single message is available
+                message = pulsarConsumer.receive(1000, TimeUnit.MILLISECONDS);
+                if(message == null){
+                    continue;
+                }
+                msgString = new String(message.getData());
 
-                    if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
-                        processMessage(consumer, msgString, message.getKey(), gson, gsonType);
-                    } else {
-                        // default codec: plain
-                        consumer.accept(Collections.singletonMap("message", msgString));
-                    }
-
-                    // Acknowledge the message so that it can be
-                    // deleted by the message broker
-                    pulsarConsumer.acknowledge(message);
-                } catch (Exception e) {
-
-                    // Message failed to process, redeliver later
-                    logger.error("consume exception ", e);
-                    if (message != null) {
-                        pulsarConsumer.negativeAcknowledge(message);
-                        logger.error("message is {}:{}", message.getKey(), msgString);
-                    }
+                if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
+                    processMessage(consumer, msgString, message.getKey(), gson, gsonType);
+                } else {
+                    // default codec: plain
+                    consumer.accept(Collections.singletonMap("message", msgString));
                 }
 
+                // Acknowledge the message so that it can be
+                // deleted by the message broker
+                pulsarConsumer.acknowledge(message);
+            } catch (Exception e) {
+
+                // Message failed to process, redeliver later
+                logger.error("consume exception ", e);
+                if (message != null) {
+                    pulsarConsumer.negativeAcknowledge(message);
+                    logger.error("message is {}:{}", message.getKey(), msgString);
+                }
             }
-        } catch (PulsarClientException e) {
-            logger.error("create pulsar client error: {}", e.getMessage());
-        } finally {
-            stopped = true;
-            done.countDown();
         }
     }
 
     public void startWithBatchReceive(Consumer<Map<String, Object>> consumer) {
-        try {
-            createConsumer();
-            Messages<byte[]> messages = null;
-            String msgString = null;
-            Gson gson = new Gson();
-            Type gsonType = new TypeToken<Map>(){}.getType();
-            while (!stopped) {
-                try {
-                    messages = pulsarConsumer.batchReceive();
-                    if(messages == null){
-                        continue;
+        Messages<byte[]> messages = null;
+        String msgString = null;
+        Gson gson = new Gson();
+        Type gsonType = new TypeToken<Map>(){}.getType();
+        while (!stopped) {
+            try {
+                messages = pulsarConsumer.batchReceive();
+                if(messages == null){
+                    continue;
+                }
+                logger.info("messages had been received, size: {}", messages.size());
+
+                if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
+                    for (Message<byte[]> msg : messages) {
+                        msgString = new String(msg.getData());
+                        processMessage(consumer, msgString, msg.getKey(), gson, gsonType);
                     }
-                    logger.info("messages had been received, size: {}", messages.size());
-
-                    if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
-                        for (Message<byte[]> msg : messages) {
-                            msgString = new String(msg.getData());
-                            processMessage(consumer, msgString, msg.getKey(), gson, gsonType);
-                        }
-                    } else {
-                        // default codec: plain
-                        for (Message<byte[]> msg : messages) {
-                            msgString = new String(msg.getData());
-                            consumer.accept(Collections.singletonMap("message", msgString));
-                        }
-                    }
-
-                    // Acknowledge the message so that it can be
-                    // deleted by the message broker
-                    pulsarConsumer.acknowledge(messages);
-                } catch (Exception e) {
-
-                    // Message failed to process, redeliver later
-                    logger.error("consume exception ", e);
-                    if (messages != null) {
-                        pulsarConsumer.negativeAcknowledge(messages);
-                        logger.error("messages failed to process, size: {}", messages.size());
+                } else {
+                    // default codec: plain
+                    for (Message<byte[]> msg : messages) {
+                        msgString = new String(msg.getData());
+                        consumer.accept(Collections.singletonMap("message", msgString));
                     }
                 }
 
+                // Acknowledge the message so that it can be
+                // deleted by the message broker
+                pulsarConsumer.acknowledge(messages);
+            } catch (Exception e) {
+                // Message failed to process, redeliver later
+                logger.error("consume exception ", e);
+                if (messages != null) {
+                    pulsarConsumer.negativeAcknowledge(messages);
+                    logger.error("messages failed to process, size: {}", messages.size());
+                }
             }
-        } catch (PulsarClientException e) {
-            logger.error("create pulsar client error: {}", e.getMessage());
-        } finally {
-            stopped = true;
-            done.countDown();
         }
     }
 
