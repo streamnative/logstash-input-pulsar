@@ -11,10 +11,12 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.pulsar.client.api.ConsumerBuilder;
 import org.apache.pulsar.client.api.Message;
+import org.apache.pulsar.client.api.Messages;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionInitialPosition;
 import org.apache.pulsar.client.api.SubscriptionType;
+import org.apache.pulsar.client.api.BatchReceivePolicy;
 import org.apache.pulsar.client.impl.auth.AuthenticationKeyStoreTls;
 
 import java.lang.reflect.Type;
@@ -51,6 +53,8 @@ public class Pulsar implements Input {
     // base config
     private Configuration config;
 
+    private Boolean isBatchReceived;
+
     // consumer config list
 
     // codec, plain, json
@@ -82,6 +86,22 @@ public class Pulsar implements Input {
     // subscription initial position: Latest,Earliest
     private static final PluginConfigSpec<String> CONFIG_SUBSCRIPTION_INITIAL_POSITION =
             PluginConfigSpec.stringSetting("subscriptionInitialPosition", "Latest");
+
+    // is Batch Received
+    private static final PluginConfigSpec<Boolean> CONFIG_IS_BATCH_RECEIVED =
+            PluginConfigSpec.booleanSetting("isBatchReceived", false);
+
+    // batch Receive Max Num
+    private static final PluginConfigSpec<Long> CONFIG_BATCH_RECEIVE_MAX_NUM =
+            PluginConfigSpec.numSetting("batchReceiveMaxNum", 50);
+
+    // batch Receive Max Bytes Size
+    private static final PluginConfigSpec<Long> CONFIG_BATCH_RECEIVE_MAX_BYTES_SIZE =
+            PluginConfigSpec.numSetting("batchReceiveMaxBytesSize", 10 * 1024);
+
+    // batch Receive Timeout, default 100 ms
+    private static final PluginConfigSpec<Long> CONFIG_BATCH_RECEIVE_TIMEOUT_MS =
+            PluginConfigSpec.numSetting("batchReceiveTimeoutMs", 100);
 
     // TODO: support     decorate_events => true &     consumer_threads => 2 & metadata
 
@@ -129,6 +149,7 @@ public class Pulsar implements Input {
         // constructors should validate configuration options
         this.id = id;
         this.config = config;
+        this.isBatchReceived = this.config.get(CONFIG_IS_BATCH_RECEIVED);
     }
 
     private void createConsumer() throws PulsarClientException {
@@ -149,6 +170,10 @@ public class Pulsar implements Input {
             String subscriptionType = config.get(CONFIG_SUBSCRIPTION_TYPE);
             String subscriptionInitialPosition = config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION);
             String topicsPattern = config.get(CONFIG_TOPICS_PATTERN);
+            int batchReceiveMaxNum = config.get(CONFIG_BATCH_RECEIVE_MAX_NUM).intValue();
+            int batchReceiveMaxBytesSize = config.get(CONFIG_BATCH_RECEIVE_MAX_BYTES_SIZE).intValue();
+            int batchReceiveTimeoutMs = config.get(CONFIG_BATCH_RECEIVE_TIMEOUT_MS).intValue();
+
             // Create a consumer
             ConsumerBuilder<byte[]> consumerBuilder = client.newConsumer()
                     .subscriptionName(subscriptionName)
@@ -164,6 +189,19 @@ public class Pulsar implements Input {
             if (consumerName != null) {
                 consumerBuilder.consumerName(consumerName);
             }
+            if (isBatchReceived) {
+                // create batchReceivePolicy
+                BatchReceivePolicy batchReceivePolicy = BatchReceivePolicy.builder()
+                        .maxNumMessages(batchReceiveMaxNum)
+                        .maxNumBytes(batchReceiveMaxBytesSize)
+                        .timeout(batchReceiveTimeoutMs, TimeUnit.MILLISECONDS)
+                        .build();
+
+                consumerBuilder.batchReceivePolicy(batchReceivePolicy);
+                logger.info("batchReceiveMaxNum is {}, batchReceiveMaxBytesSize is {}, batchReceiveTimeoutMs is {}",
+                        batchReceiveMaxNum, batchReceiveMaxBytesSize, batchReceiveTimeoutMs);
+            }
+
             pulsarConsumer = consumerBuilder.subscribe();
             logger.info("Create subscription {} on topics {} with codec {}, consumer name is {},subscription Type is {},subscriptionInitialPosition is {}", subscriptionName, topics, codec , consumerName, subscriptionType, subscriptionInitialPosition);
 
@@ -263,7 +301,6 @@ public class Pulsar implements Input {
         }
     }
 
-
     @Override
     public void start(Consumer<Map<String, Object>> consumer) {
 
@@ -275,61 +312,112 @@ public class Pulsar implements Input {
         // events should loop indefinitely until they receive a stop request. Inputs that produce
         // a finite sequence of events should loop until that sequence is exhausted or until they
         // receive a stop request, whichever comes first.
-
         try {
             createConsumer();
-            Message<byte[]> message = null;
-            String msgString = null;
-            Gson gson = new Gson();
-            Type gsonType = new TypeToken<Map>(){}.getType();
-            while (!stopped) {
-                try {
-                    // Block and wait until a single message is available
-                    message = pulsarConsumer.receive(1000, TimeUnit.MILLISECONDS);
-                    if(message == null){
-                        continue;
-                    }
-                    msgString = new String(message.getData());
-
-                    if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
-                        try {
-                            Map map = gson.fromJson(msgString, gsonType);
-                            consumer.accept(map);
-                        } catch (Exception e) {
-                            // json parse exception
-                            // treat it as codec plain
-                            logger.error("json parse exception ", e);
-                            logger.error("message key is {}, set logging level to debug if you'd like to see message", message.getKey());
-                            logger.debug("message content is {}", msgString);
-                            logger.error("default codec plain will be used ");
-
-                            consumer.accept(Collections.singletonMap("message", msgString));
-                        }
-                    } else {
-                        // default codec: plain
-                        consumer.accept(Collections.singletonMap("message", msgString));
-                    }
-
-
-                    // Acknowledge the message so that it can be
-                    // deleted by the message broker
-                    pulsarConsumer.acknowledge(message);
-                } catch (Exception e) {
-
-                    // Message failed to process, redeliver later
-                    logger.error("consume exception ", e);
-                    if (message != null) {
-                        pulsarConsumer.negativeAcknowledge(message);
-                        logger.error("message is {}:{}", message.getKey(), msgString);
-                    }
-                }
-
+            if (!isBatchReceived) {
+                logger.info("start with single receive");
+                startWithSingleReceive(consumer);
+            } else {
+                logger.info("start with batch receive");
+                startWithBatchReceive(consumer);
             }
         } catch (PulsarClientException e) {
             logger.error("create pulsar client error: {}", e.getMessage());
         } finally {
             stopped = true;
             done.countDown();
+        }
+    }
+
+    public void startWithSingleReceive(Consumer<Map<String, Object>> consumer) {
+        Message<byte[]> message = null;
+        String msgString = null;
+        Gson gson = new Gson();
+        Type gsonType = new TypeToken<Map>(){}.getType();
+        while (!stopped) {
+            try {
+                // Block and wait until a single message is available
+                message = pulsarConsumer.receive(1000, TimeUnit.MILLISECONDS);
+                if(message == null){
+                    continue;
+                }
+                msgString = new String(message.getData());
+
+                if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
+                    processMessage(consumer, msgString, message.getKey(), gson, gsonType);
+                } else {
+                    // default codec: plain
+                    consumer.accept(Collections.singletonMap("message", msgString));
+                }
+
+                // Acknowledge the message so that it can be
+                // deleted by the message broker
+                pulsarConsumer.acknowledge(message);
+            } catch (Exception e) {
+
+                // Message failed to process, redeliver later
+                logger.error("consume exception ", e);
+                if (message != null) {
+                    pulsarConsumer.negativeAcknowledge(message);
+                    logger.error("message is {}:{}", message.getKey(), msgString);
+                }
+            }
+        }
+    }
+
+    public void startWithBatchReceive(Consumer<Map<String, Object>> consumer) {
+        Messages<byte[]> messages = null;
+        String msgString = null;
+        Gson gson = new Gson();
+        Type gsonType = new TypeToken<Map>(){}.getType();
+        while (!stopped) {
+            try {
+                messages = pulsarConsumer.batchReceive();
+                if(messages == null){
+                    continue;
+                }
+                logger.info("messages had been received, size: {}", messages.size());
+
+                if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
+                    for (Message<byte[]> msg : messages) {
+                        msgString = new String(msg.getData());
+                        processMessage(consumer, msgString, msg.getKey(), gson, gsonType);
+                    }
+                } else {
+                    // default codec: plain
+                    for (Message<byte[]> msg : messages) {
+                        msgString = new String(msg.getData());
+                        consumer.accept(Collections.singletonMap("message", msgString));
+                    }
+                }
+
+                // Acknowledge the message so that it can be
+                // deleted by the message broker
+                pulsarConsumer.acknowledge(messages);
+            } catch (Exception e) {
+                // Message failed to process, redeliver later
+                logger.error("consume exception ", e);
+                if (messages != null) {
+                    pulsarConsumer.negativeAcknowledge(messages);
+                    logger.error("messages failed to process, size: {}", messages.size());
+                }
+            }
+        }
+    }
+
+    private void processMessage(Consumer<Map<String, Object>> consumer, String msgString, String msgKey, Gson gson, Type gsonType) {
+        try {
+            Map map = gson.fromJson(msgString, gsonType);
+            consumer.accept(map);
+        } catch (Exception e) {
+            // json parse exception
+            // treat it as codec plain
+            logger.error("json parse exception ", e);
+            logger.error("message key is {}, set logging level to debug if you'd like to see message", msgKey);
+            logger.debug("message content is {}", msgString);
+            logger.error("default codec plain will be used ");
+
+            consumer.accept(Collections.singletonMap("message", msgString));
         }
     }
 
@@ -367,7 +455,13 @@ public class Pulsar implements Input {
                 CONFIG_ALLOW_TLS_INSECURE_CONNECTION,
                 CONFIG_AUTH_PLUGIN_CLASS_NAME,
                 CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION,
-                CONFIG_CIPHERS
+                CONFIG_CIPHERS,
+
+                // Batch Receive
+                CONFIG_IS_BATCH_RECEIVED,
+                CONFIG_BATCH_RECEIVE_MAX_NUM,
+                CONFIG_BATCH_RECEIVE_MAX_BYTES_SIZE,
+                CONFIG_BATCH_RECEIVE_TIMEOUT_MS
         );
     }
 
