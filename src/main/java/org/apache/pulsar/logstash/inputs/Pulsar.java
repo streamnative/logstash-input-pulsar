@@ -83,6 +83,9 @@ public class Pulsar implements Input {
     private static final PluginConfigSpec<String> CONFIG_SUBSCRIPTION_INITIAL_POSITION =
             PluginConfigSpec.stringSetting("subscriptionInitialPosition", "Latest");
 
+    private static final PluginConfigSpec<Boolean> CONFIG_IF_OUTPUT_PULSAR_ERROR =
+            PluginConfigSpec.booleanSetting("block_if_output_pulsar_error", false);
+
     // TODO: support     decorate_events => true &     consumer_threads => 2 & metadata
 
     // TLS Config
@@ -96,19 +99,19 @@ public class Pulsar implements Input {
     );
 
     private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_TLS =
-            PluginConfigSpec.booleanSetting("enable_tls",false);
+            PluginConfigSpec.booleanSetting("enable_tls", false);
 
     private static final PluginConfigSpec<Boolean> CONFIG_ALLOW_TLS_INSECURE_CONNECTION =
-            PluginConfigSpec.booleanSetting("allow_tls_insecure_connection",false);
+            PluginConfigSpec.booleanSetting("allow_tls_insecure_connection", false);
 
     private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION =
-            PluginConfigSpec.booleanSetting("enable_tls_hostname_verification",false);
+            PluginConfigSpec.booleanSetting("enable_tls_hostname_verification", false);
 
     private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PATH =
-            PluginConfigSpec.stringSetting("tls_trust_store_path","");
+            PluginConfigSpec.stringSetting("tls_trust_store_path", "");
 
     private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PASSWORD =
-            PluginConfigSpec.stringSetting("tls_trust_store_password","");
+            PluginConfigSpec.stringSetting("tls_trust_store_password", "");
 
     private static final PluginConfigSpec<String> CONFIG_TLS_KEY_STORE_PATH =
             PluginConfigSpec.stringSetting("tls_key_store_path", "");
@@ -117,7 +120,7 @@ public class Pulsar implements Input {
             PluginConfigSpec.stringSetting("tls_key_store_password", "");
 
     private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN_CLASS_NAME =
-            PluginConfigSpec.stringSetting("auth_plugin_class_name",authPluginClassName);
+            PluginConfigSpec.stringSetting("auth_plugin_class_name", authPluginClassName);
 
     private static final PluginConfigSpec<List<Object>> CONFIG_CIPHERS =
             PluginConfigSpec.arraySetting("ciphers", ciphers, false, false);
@@ -165,7 +168,7 @@ public class Pulsar implements Input {
                 consumerBuilder.consumerName(consumerName);
             }
             pulsarConsumer = consumerBuilder.subscribe();
-            logger.info("Create subscription {} on topics {} with codec {}, consumer name is {},subscription Type is {},subscriptionInitialPosition is {}", subscriptionName, topics, codec , consumerName, subscriptionType, subscriptionInitialPosition);
+            logger.info("Create subscription {} on topics {} with codec {}, consumer name is {},subscription Type is {},subscriptionInitialPosition is {}", subscriptionName, topics, codec, consumerName, subscriptionType, subscriptionInitialPosition);
 
         } catch (PulsarClientException e) {
             logger.error("pulsar client exception ", e);
@@ -209,7 +212,7 @@ public class Pulsar implements Input {
                 .enableTlsHostnameVerification(enableTlsHostnameVerification)
                 .tlsTrustStorePath(tlsTrustStorePath)
                 .tlsTrustStorePassword(tlsTrustStorePassword)
-                .authentication(pluginClassName,authMap)
+                .authentication(pluginClassName, authMap)
                 .useKeyStoreTls(true)
                 .build();
     }
@@ -277,16 +280,18 @@ public class Pulsar implements Input {
         // receive a stop request, whichever comes first.
 
         try {
+            Boolean blockIfOutputPulsarError = config.get(CONFIG_IF_OUTPUT_PULSAR_ERROR);
             createConsumer();
             Message<byte[]> message = null;
             String msgString = null;
             Gson gson = new Gson();
-            Type gsonType = new TypeToken<Map>(){}.getType();
+            Type gsonType = new TypeToken<Map>() {
+            }.getType();
             while (!stopped) {
                 try {
                     // Block and wait until a single message is available
                     message = pulsarConsumer.receive(1000, TimeUnit.MILLISECONDS);
-                    if(message == null){
+                    if (message == null) {
                         continue;
                     }
                     msgString = new String(message.getData());
@@ -313,7 +318,11 @@ public class Pulsar implements Input {
 
                     // Acknowledge the message so that it can be
                     // deleted by the message broker
-                    pulsarConsumer.acknowledge(message);
+                    if (blockIfOutputPulsarError && Boolean.parseBoolean(System.getProperty("output.errors", String.valueOf(false)))) {
+                        pulsarConsumer.negativeAcknowledge(message);
+                    } else {
+                        pulsarConsumer.acknowledge(message);
+                    }
                 } catch (Exception e) {
 
                     // Message failed to process, redeliver later
@@ -356,6 +365,7 @@ public class Pulsar implements Input {
                 CONFIG_CONSUMER_NAME,
                 CONFIG_CODEC,
                 CONFIG_TOPICS_PATTERN,
+                CONFIG_IF_OUTPUT_PULSAR_ERROR,
 
                 // Pulsar TLS Config
                 CONFIG_ENABLE_TLS,
