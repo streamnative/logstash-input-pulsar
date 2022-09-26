@@ -372,7 +372,7 @@ public class Pulsar implements Input {
                 if (messages == null) {
                     continue;
                 }
-                logger.info("messages had been received, size: {}", messages.size());
+                logger.debug("messages had been received, size: {}", messages.size());
 
                 if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
                     for (Message<byte[]> msg : messages) {
