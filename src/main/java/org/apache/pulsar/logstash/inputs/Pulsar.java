@@ -305,13 +305,18 @@ public class Pulsar implements Input {
 
     @Override
     public void start(Consumer<Map<String, Object>> consumer) {
-        Boolean blockIfOutputPulsarError = config.get(CONFIG_IF_OUTPUT_PULSAR_ERROR);
-        if (!isBatchReceived) {
-            logger.info("start with single receive");
-            startWithSingleReceive(consumer, blockIfOutputPulsarError);
-        } else {
-            logger.info("start with batch receive");
-            startWithBatchReceive(consumer, blockIfOutputPulsarError);
+        try {
+            Boolean blockIfOutputPulsarError = config.get(CONFIG_IF_OUTPUT_PULSAR_ERROR);
+            createConsumer();
+            if (!isBatchReceived) {
+                logger.info("start with single receive");
+                startWithSingleReceive(consumer, blockIfOutputPulsarError);
+            } else {
+                logger.info("start with batch receive");
+                startWithBatchReceive(consumer, blockIfOutputPulsarError);
+            }
+        } catch (PulsarClientException e) {
+            logger.error("create pulsar client errors: {}", e.getMessage());
         }
     }
 
