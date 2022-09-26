@@ -305,73 +305,13 @@ public class Pulsar implements Input {
 
     @Override
     public void start(Consumer<Map<String, Object>> consumer) {
-
-        // The start method should push Map<String, Object> instances to the supplied QueueWriter
-        // instance. Those will be converted to Event instances later in the Logstash event
-        // processing pipeline.
-        //
-        // Inputs that operate on unbounded streams of data or that poll indefinitely for new
-        // events should loop indefinitely until they receive a stop request. Inputs that produce
-        // a finite sequence of events should loop until that sequence is exhausted or until they
-        // receive a stop request, whichever comes first.
-        try {
-            Boolean blockIfOutputPulsarError = config.get(CONFIG_IF_OUTPUT_PULSAR_ERROR);
-            createConsumer();
-            Message<byte[]> message = null;
-            String msgString = null;
-            Gson gson = new Gson();
-            Type gsonType = new TypeToken<Map>() {
-            }.getType();
-            while (!stopped) {
-                try {
-                    // Block and wait until a single message is available
-                    message = pulsarConsumer.receive(1000, TimeUnit.MILLISECONDS);
-                    if (message == null) {
-                        continue;
-                    }
-                    msgString = new String(message.getData());
-
-                    if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
-                        try {
-                            Map map = gson.fromJson(msgString, gsonType);
-                            consumer.accept(map);
-                        } catch (Exception e) {
-                            // json parse exception
-                            // treat it as codec plain
-                            logger.error("json parse exception ", e);
-                            logger.error("message key is {}, set logging level to debug if you'd like to see message", message.getKey());
-                            logger.debug("message content is {}", msgString);
-                            logger.error("default codec plain will be used ");
-
-                            consumer.accept(Collections.singletonMap("message", msgString));
-                        }
-                    } else {
-                        // default codec: plain
-                        consumer.accept(Collections.singletonMap("message", msgString));
-                    }
-                } catch (Exception e) {
-
-                    // Message failed to process, redeliver later
-                    logger.error("consume exception ", e);
-                    if (message != null) {
-                        pulsarConsumer.negativeAcknowledge(message);
-                        logger.error("message is {}:{}", message.getKey(), msgString);
-                    }
-                }
-
-                if (!isBatchReceived) {
-                    logger.info("start with single receive");
-                    startWithSingleReceive(consumer, blockIfOutputPulsarError);
-                } else {
-                    logger.info("start with batch receive");
-                    startWithBatchReceive(consumer, blockIfOutputPulsarError);
-                }
-            }
-        } catch (PulsarClientException e) {
-            logger.error("create pulsar client error: {}", e.getMessage());
-        } finally {
-            stopped = true;
-            done.countDown();
+        Boolean blockIfOutputPulsarError = config.get(CONFIG_IF_OUTPUT_PULSAR_ERROR);
+        if (!isBatchReceived) {
+            logger.info("start with single receive");
+            startWithSingleReceive(consumer, blockIfOutputPulsarError);
+        } else {
+            logger.info("start with batch receive");
+            startWithBatchReceive(consumer, blockIfOutputPulsarError);
         }
     }
 
