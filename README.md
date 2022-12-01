@@ -6,7 +6,7 @@ It is fully free and fully open source. The license is Apache 2.0, meaning you a
 
 This input will read events from a Pulsar topic.
 
-This plugin uses Pulsar Client 2.9.0. For broker compatibility, see the official Pulsar compatibility reference. If the compatibility wiki is not up-to-date, please contact Pulsar support/community to confirm compatibility.
+This plugin uses Pulsar Client 2.10.2. For broker compatibility, see the official Pulsar compatibility reference. If the compatibility wiki is not up-to-date, please contact Pulsar support/community to confirm compatibility.
 
 If you require features not yet available in this plugin (including client version upgrades), please file an issue with details about what you need.
 
@@ -15,10 +15,10 @@ This plugin supports these configuration options.
 
 | Settings                         |                          Input type                          |  Required |
 |----------------------------------|:------------------------------------------------------------:|----------:|
-| serviceUrl                       |                            string                            |        No |
+| serviceUrl                       |                            string                            |       Yes |
 | topics                           |                            array                             |       Yes |
 | subscriptionName                 |                            string                            |       Yes |
-| consumerName                     |                            string                            |        No |
+| consumerName                     |                            string                            |       Yes |
 | subscriptionType                 | string, one of["Shared","Exclusive","Failover","Key_shared"] |        No |
 | subscriptionInitialPosition      |             string, one of["Latest","Earliest"]              |        No |
 | codec                            |               string, one of ["plain","json"]                |        No |
