@@ -29,8 +29,7 @@ This plugin supports these configuration options.
 | tls_trust_store_password         |                   string, default is empty                   |        No |
 | enable_tls_hostname_verification |       boolean, one of [true, false]. default is false        |        No |
 | allow_tls_insecure_connection    |        boolean, one of [true, false].default is false        |        No |
-| enable_auth                      |        boolean, one of [true, false].default is false        |        No |
-| auth_plugin                      |                            string                            |        No |
+| auth_plugin_class_name           |                            string                            |        No |
 | auth_params                      |                            string                            |        No |
 
 
@@ -51,6 +50,7 @@ input{
   }
 }
 ```
+
 pulsar with token
 ```
 input{
@@ -64,8 +64,7 @@ input{
     subscriptionName => "my_subscription"
     subscriptionType => "Shared"
     subscriptionInitialPosition => "Earliest"
-    enable_auth => true
-    auth_plugin => "org.apache.pulsar.client.impl.auth.AuthenticationToken"
+    auth_plugin_class_name => "org.apache.pulsar.client.impl.auth.AuthenticationToken"
     auth_params => "token:${token}"
   }
 }

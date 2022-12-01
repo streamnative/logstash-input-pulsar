@@ -9,6 +9,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.pulsar.client.api.ClientBuilder;
 import org.apache.pulsar.client.api.ConsumerBuilder;
 import org.apache.pulsar.client.api.Message;
 import org.apache.pulsar.client.api.PulsarClient;
@@ -105,11 +106,8 @@ public class Pulsar implements Input {
     private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PASSWORD =
             PluginConfigSpec.stringSetting("tls_trust_store_password","");
 
-    private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_AUTH =
-            PluginConfigSpec.booleanSetting("enable_auth",false);
-
     private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN =
-            PluginConfigSpec.stringSetting("auth_plugin",authPluginClassName);
+            PluginConfigSpec.stringSetting("auth_plugin_class_name","");
 
     private static final PluginConfigSpec<String> CONFIG_AUTH_PARAMS =
             PluginConfigSpec.stringSetting("auth_params","");
@@ -137,51 +135,39 @@ public class Pulsar implements Input {
             String subscriptionType = config.get(CONFIG_SUBSCRIPTION_TYPE);
             String subscriptionInitialPosition = config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION);
             boolean enableTls = config.get(CONFIG_ENABLE_TLS);
-            boolean enableAuth = config.get(CONFIG_ENABLE_AUTH);
 
-            if(enableTls && enableAuth){
-                logger.error("Unable to Tls and Token authentication at the same time");
-                throw new IllegalStateException("Unable to Tls and Token authentication at the same time，enable_tls => true && enable_token => true" );
-            } else if (enableTls) {
-                // pulsar TLS
-                Boolean allowTlsInsecureConnection = config.get(CONFIG_ALLOW_TLS_INSECURE_CONNECTION);
-                Boolean enableTlsHostnameVerification = config.get(CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION);
-                String tlsTrustStorePath = config.get(CONFIG_TLS_TRUST_STORE_PATH);
-                Map<String, String> authMap = new HashMap<>();
-                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_TYPE, "JKS");
-                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PATH, tlsTrustStorePath);
-                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PW, config.get(CONFIG_TLS_TRUST_STORE_PASSWORD));
+            // pulsar TLS
+            Boolean allowTlsInsecureConnection = config.get(CONFIG_ALLOW_TLS_INSECURE_CONNECTION);
+            Boolean enableTlsHostnameVerification = config.get(CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION);
+            String tlsTrustStorePath = config.get(CONFIG_TLS_TRUST_STORE_PATH);
+            Map<String, String> authMap = new HashMap<>();
+            authMap.put(AuthenticationKeyStoreTls.KEYSTORE_TYPE, "JKS");
+            authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PATH, tlsTrustStorePath);
+            authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PW, config.get(CONFIG_TLS_TRUST_STORE_PASSWORD));
 
-                Set<String> cipherSet = new HashSet<>();
-                Optional.ofNullable(config.get(CONFIG_CIPHERS)).ifPresent(
-                        cipherList -> cipherList.forEach(cipher -> cipherSet.add(String.valueOf(cipher))));
+            Set<String> cipherSet = new HashSet<>();
+            Optional.ofNullable(config.get(CONFIG_CIPHERS)).ifPresent(
+                    cipherList -> cipherList.forEach(cipher -> cipherSet.add(String.valueOf(cipher))));
 
-                Set<String> protocolSet = new HashSet<>();
-                Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
-                        protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
+            Set<String> protocolSet = new HashSet<>();
+            Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
+                    protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
 
-                client = PulsarClient.builder()
-                        .serviceUrl(serviceUrl)
-                        .tlsCiphers(cipherSet)
-                        .tlsProtocols(protocolSet)
-                        .allowTlsInsecureConnection(allowTlsInsecureConnection)
-                        .enableTlsHostnameVerification(enableTlsHostnameVerification)
-                        .tlsTrustStorePath(tlsTrustStorePath)
-                        .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD))
-                        .authentication(config.get(CONFIG_AUTH_PLUGIN),authMap)
-                        .build();
-            } else if (enableAuth) {
-                // pulsar Token
-                client = PulsarClient.builder()
-                        .serviceUrl(serviceUrl)
-                        .authentication(config.get(CONFIG_AUTH_PLUGIN),config.get(CONFIG_AUTH_PARAMS))
-                        .build();
+            ClientBuilder clientBuilder = PulsarClient.builder()
+                    .serviceUrl(serviceUrl)
+                    .tlsCiphers(cipherSet)
+                    .tlsProtocols(protocolSet)
+                    .allowTlsInsecureConnection(allowTlsInsecureConnection)
+                    .enableTlsHostnameVerification(enableTlsHostnameVerification)
+                    .tlsTrustStorePath(tlsTrustStorePath)
+                    .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD));
+
+            if (enableTls) {
+                clientBuilder.authentication(authPluginClassName, authMap);
             } else {
-                client = PulsarClient.builder()
-                        .serviceUrl(serviceUrl)
-                        .build();
+                clientBuilder.authentication(config.get(CONFIG_AUTH_PLUGIN), config.get(CONFIG_AUTH_PARAMS));
             }
-
+            client = clientBuilder.build();
             // Create a consumer
             ConsumerBuilder<byte[]> consumerBuilder = client.newConsumer()
                     .topics(topics)
@@ -343,7 +329,6 @@ public class Pulsar implements Input {
                 CONFIG_CODEC,
                 CONFIG_AUTH_PLUGIN,
                 // Pulsar Token Config
-                CONFIG_ENABLE_AUTH,
                 CONFIG_AUTH_PARAMS
 
 
