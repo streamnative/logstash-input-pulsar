@@ -153,21 +153,19 @@ public class Pulsar implements Input {
             Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
                     protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
 
-            ClientBuilder clientBuilder = PulsarClient.builder()
-                    .serviceUrl(serviceUrl)
-                    .tlsCiphers(cipherSet)
-                    .tlsProtocols(protocolSet)
-                    .allowTlsInsecureConnection(allowTlsInsecureConnection)
-                    .enableTlsHostnameVerification(enableTlsHostnameVerification)
-                    .tlsTrustStorePath(tlsTrustStorePath)
-                    .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD));
-
+            ClientBuilder clientBuilder = PulsarClient.builder().serviceUrl(serviceUrl);
             if (enableTls) {
-                clientBuilder.authentication(authPluginClassName, authMap);
+                 clientBuilder.tlsCiphers(cipherSet).tlsProtocols(protocolSet)
+                 .allowTlsInsecureConnection(allowTlsInsecureConnection)
+                 .enableTlsHostnameVerification(enableTlsHostnameVerification)
+                 .tlsTrustStorePath(tlsTrustStorePath)
+                 .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD))
+                 .authentication(authPluginClassName, authMap);
             } else {
                 clientBuilder.authentication(config.get(CONFIG_AUTH_PLUGIN), config.get(CONFIG_AUTH_PARAMS));
             }
             client = clientBuilder.build();
+
             // Create a consumer
             ConsumerBuilder<byte[]> consumerBuilder = client.newConsumer()
                     .topics(topics)
