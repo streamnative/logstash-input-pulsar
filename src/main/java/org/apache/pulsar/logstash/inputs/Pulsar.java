@@ -105,14 +105,14 @@ public class Pulsar implements Input {
     private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PASSWORD =
             PluginConfigSpec.stringSetting("tls_trust_store_password","");
 
-    private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_TOKEN =
-            PluginConfigSpec.booleanSetting("enable_token",false);
+    private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_AUTH =
+            PluginConfigSpec.booleanSetting("enable_auth",false);
 
-    private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN_CLASS_NAME =
-            PluginConfigSpec.stringSetting("auth_plugin_class_name",authPluginClassName);
+    private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN =
+            PluginConfigSpec.stringSetting("auth_plugin",authPluginClassName);
 
-    private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN_PARAMS_STRING =
-            PluginConfigSpec.stringSetting("auth_plugin_params_String","");
+    private static final PluginConfigSpec<String> CONFIG_AUTH_PARAMS =
+            PluginConfigSpec.stringSetting("auth_params","");
 
     private static final PluginConfigSpec<List<Object>> CONFIG_CIPHERS =
             PluginConfigSpec.arraySetting("ciphers", Collections.singletonList(ciphers), false, false);
@@ -137,9 +137,9 @@ public class Pulsar implements Input {
             String subscriptionType = config.get(CONFIG_SUBSCRIPTION_TYPE);
             String subscriptionInitialPosition = config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION);
             boolean enableTls = config.get(CONFIG_ENABLE_TLS);
-            boolean enableToken = config.get(CONFIG_ENABLE_TOKEN);
+            boolean enableAuth = config.get(CONFIG_ENABLE_AUTH);
 
-            if(enableTls && enableToken){
+            if(enableTls && enableAuth){
                 logger.error("Unable to Tls and Token authentication at the same time");
                 throw new IllegalStateException("Unable to Tls and Token authentication at the same time，enable_tls => true && enable_token => true" );
             } else if (enableTls) {
@@ -168,13 +168,13 @@ public class Pulsar implements Input {
                         .enableTlsHostnameVerification(enableTlsHostnameVerification)
                         .tlsTrustStorePath(tlsTrustStorePath)
                         .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD))
-                        .authentication(config.get(CONFIG_AUTH_PLUGIN_CLASS_NAME),authMap)
+                        .authentication(config.get(CONFIG_AUTH_PLUGIN),authMap)
                         .build();
-            } else if (enableToken) {
+            } else if (enableAuth) {
                 // pulsar Token
                 client = PulsarClient.builder()
                         .serviceUrl(serviceUrl)
-                        .authentication(config.get(CONFIG_AUTH_PLUGIN_CLASS_NAME),config.get(CONFIG_AUTH_PLUGIN_PARAMS_STRING))
+                        .authentication(config.get(CONFIG_AUTH_PLUGIN),config.get(CONFIG_AUTH_PARAMS))
                         .build();
             } else {
                 client = PulsarClient.builder()
@@ -341,10 +341,10 @@ public class Pulsar implements Input {
                 CONFIG_SUBSCRIPTION_INITIAL_POSITION,
                 CONFIG_CONSUMER_NAME,
                 CONFIG_CODEC,
-                CONFIG_AUTH_PLUGIN_CLASS_NAME,
+                CONFIG_AUTH_PLUGIN,
                 // Pulsar Token Config
-                CONFIG_ENABLE_TOKEN,
-                CONFIG_AUTH_PLUGIN_PARAMS_STRING
+                CONFIG_ENABLE_AUTH,
+                CONFIG_AUTH_PARAMS
 
 
         );
