@@ -16,6 +16,7 @@ import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionInitialPosition;
 import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.pulsar.client.impl.auth.AuthenticationKeyStoreTls;
+import org.apache.pulsar.client.impl.auth.AuthenticationTls;
 
 import java.lang.reflect.Type;
 import java.util.Arrays;
@@ -105,6 +106,12 @@ public class Pulsar implements Input {
     private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_STORE_PASSWORD =
             PluginConfigSpec.stringSetting("tls_trust_store_password","");
 
+    private static final PluginConfigSpec<String> CONFIG_TLS_CLIENT_CERT_FILE_PATH =
+            PluginConfigSpec.stringSetting("tls_client_cert_file_path","");
+
+    private static final PluginConfigSpec<String> CONFIG_TLS_CLIENT_KEY_FILE_PATH =
+            PluginConfigSpec.stringSetting("tls_client_key_file_path","");
+
     private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN_CLASS_NAME =
             PluginConfigSpec.stringSetting("auth_plugin_class_name",authPluginClassName);
 
@@ -135,30 +142,69 @@ public class Pulsar implements Input {
                 // pulsar TLS
                 Boolean allowTlsInsecureConnection = config.get(CONFIG_ALLOW_TLS_INSECURE_CONNECTION);
                 Boolean enableTlsHostnameVerification = config.get(CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION);
-                String tlsTrustStorePath = config.get(CONFIG_TLS_TRUST_STORE_PATH);
                 Map<String, String> authMap = new HashMap<>();
-                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_TYPE, "JKS");
-                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PATH, tlsTrustStorePath);
-                authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PW, config.get(CONFIG_TLS_TRUST_STORE_PASSWORD));
 
                 Set<String> cipherSet = new HashSet<>();
                 Optional.ofNullable(config.get(CONFIG_CIPHERS)).ifPresent(
                         cipherList -> cipherList.forEach(cipher -> cipherSet.add(String.valueOf(cipher))));
 
                 Set<String> protocolSet = new HashSet<>();
-                Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
-                        protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
+                 Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
+                         protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
 
-                client = PulsarClient.builder()
-                        .serviceUrl(serviceUrl)
-                        .tlsCiphers(cipherSet)
-                        .tlsProtocols(protocolSet)
-                        .allowTlsInsecureConnection(allowTlsInsecureConnection)
-                        .enableTlsHostnameVerification(enableTlsHostnameVerification)
-                        .tlsTrustStorePath(tlsTrustStorePath)
-                        .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD))
-                        .authentication(config.get(CONFIG_AUTH_PLUGIN_CLASS_NAME),authMap)
-                        .build();
+                // Since tls with trust store was supported previously check if trust store path is supplied in the
+                // configuration. If a trust store was not supplied but enableTls is true then look for path to cert
+                // and key in the properties.
+                String tlsTrustStorePath = config.get(CONFIG_TLS_TRUST_STORE_PATH);
+                if("".equals(tlsTrustStorePath)) {
+                    // This code assumes the CA certs and the client cert / private key are going to be in the same
+                    // JKS file. This is technically allowed in Java but is generally regarded as a bad security
+                    // practice. The truststore is supposed to only contain public certs of the CAs to be trusted and
+                    // the keystore is supposed to contain the client's identity: including the certificate (public)
+                    // and the key (private)
+                    authMap.put(AuthenticationKeyStoreTls.KEYSTORE_TYPE, "JKS");
+                    authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PATH, tlsTrustStorePath);
+                    authMap.put(AuthenticationKeyStoreTls.KEYSTORE_PW, config.get(CONFIG_TLS_TRUST_STORE_PASSWORD));
+
+
+                    logger.info("Attempting to create TLS Pulsar client to {} using protocols: [{}], ciphers: [{}]," +
+                                "allowTlsInsecureConnection={}, enableTlsHostnameVerification={}, the trust store " +
+                                "located at: {}",
+                                serviceUrl, String.join(", ", protocolSet), String.join(", ",cipherSet),
+                                allowTlsInsecureConnection, enableTlsHostnameVerification, tlsTrustStorePath);
+                    client = PulsarClient.builder()
+                            .serviceUrl(serviceUrl)
+                            .tlsCiphers(cipherSet)
+                            .tlsProtocols(protocolSet)
+                            .allowTlsInsecureConnection(allowTlsInsecureConnection)
+                            .enableTlsHostnameVerification(enableTlsHostnameVerification)
+                            .tlsTrustStorePath(tlsTrustStorePath)
+                            .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD))
+                            .authentication(config.get(CONFIG_AUTH_PLUGIN_CLASS_NAME),authMap)
+                            .build();
+                    logger.info("TLS Pulsar client successfully created with JKS-based keystore");
+                } else {
+                    String tlsClientCertFilePath = config.get(CONFIG_TLS_CLIENT_CERT_FILE_PATH);
+                    String tlsClientKeyFilePath = config.get(CONFIG_TLS_CLIENT_KEY_FILE_PATH);
+
+                    logger.info("Attempting to create TLS Pulsar client to {} using protocols: [{}], ciphers: [{}]," +
+                                "allowTlsInsecureConnection={}, enableTlsHostnameVerification={}, the trust store " +
+                                "located at: {}, client certificate located at: {} and the private key located at: {}",
+                                 serviceUrl, String.join(", ", protocolSet), String.join(", ",cipherSet),
+                                 allowTlsInsecureConnection, enableTlsHostnameVerification, tlsTrustStorePath,
+                                 tlsClientCertFilePath, tlsClientKeyFilePath);
+                    client = PulsarClient.builder()
+                             .serviceUrl(serviceUrl)
+                             .tlsCiphers(cipherSet)
+                             .tlsProtocols(protocolSet)
+                             .allowTlsInsecureConnection(allowTlsInsecureConnection)
+                             .enableTlsHostnameVerification(enableTlsHostnameVerification)
+                             .tlsTrustStorePath(tlsTrustStorePath)
+                             .tlsTrustStorePassword(config.get(CONFIG_TLS_TRUST_STORE_PASSWORD))
+                             .authentication(new AuthenticationTls(tlsClientCertFilePath,tlsClientKeyFilePath))
+                             .build();
+                    logger.info("TLS Pulsar client successfully created with file-system cert/key pair");
+                }
             } else {
                 client = PulsarClient.builder()
                         .serviceUrl(serviceUrl)
