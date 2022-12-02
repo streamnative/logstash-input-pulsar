@@ -328,8 +328,6 @@ public class Pulsar implements Input {
                 CONFIG_AUTH_PLUGIN,
                 // Pulsar Token Config
                 CONFIG_AUTH_PARAMS
-
-
         );
     }
 
