@@ -152,11 +152,11 @@ public class Pulsar implements Input {
                  Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
                          protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
 
-                // Since tls with trust store was supported previously check if trust store path is supplied in the
-                // configuration. If a trust store was not supplied but enableTls is true then look for path to cert
-                // and key in the properties.
+                // Since tls with trust store was supported previously check if client cert path is supplied in the
+                // configuration. If a client cert not was supplied then proceed with JKS, otherwise look for file
+                // locations
                 String tlsTrustStorePath = config.get(CONFIG_TLS_TRUST_STORE_PATH);
-                if("".equals(tlsTrustStorePath)) {
+                if(!"".equals(config.get(CONFIG_TLS_CLIENT_CERT_FILE_PATH))) {
                     // This code assumes the CA certs and the client cert / private key are going to be in the same
                     // JKS file. This is technically allowed in Java but is generally regarded as a bad security
                     // practice. The truststore is supposed to only contain public certs of the CAs to be trusted and
@@ -368,7 +368,17 @@ public class Pulsar implements Input {
                 CONFIG_SUBSCRIPTION_TYPE,
                 CONFIG_SUBSCRIPTION_INITIAL_POSITION,
                 CONFIG_CONSUMER_NAME,
-                CONFIG_CODEC
+                CONFIG_CODEC,
+                CONFIG_ENABLE_TLS,
+                CONFIG_ALLOW_TLS_INSECURE_CONNECTION,
+                CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION,
+                CONFIG_TLS_TRUST_STORE_PATH,
+                CONFIG_TLS_TRUST_STORE_PASSWORD,
+                CONFIG_TLS_CLIENT_CERT_FILE_PATH,
+                CONFIG_TLS_CLIENT_KEY_FILE_PATH,
+                CONFIG_AUTH_PLUGIN_CLASS_NAME,
+                CONFIG_CIPHERS,
+                CONFIG_PROTOCOLS
         );
     }
 
