@@ -6,7 +6,7 @@ It is fully free and fully open source. The license is Apache 2.0, meaning you a
 
 This input will read events from a Pulsar topic.
 
-This plugin uses Pulsar Client 2.9.0. For broker compatibility, see the official Pulsar compatibility reference. If the compatibility wiki is not up-to-date, please contact Pulsar support/community to confirm compatibility.
+This plugin uses Pulsar Client 2.10.2. For broker compatibility, see the official Pulsar compatibility reference. If the compatibility wiki is not up-to-date, please contact Pulsar support/community to confirm compatibility.
 
 If you require features not yet available in this plugin (including client version upgrades), please file an issue with details about what you need.
 
@@ -15,13 +15,35 @@ This plugin supports these configuration options.
 
 | Settings    | Input type     | Required  |
 | ------------- |:-------------:| -----:|
-| codec      | string, one of ["plain","json"] | No |
-| topics      | array | Yes |
-| subscriptionName      | string | Yes |
-| consumerName      | string | No |
-| subscriptionType      | string, one of["Shared","Exclusive","Failover","Key_shared"] | No |
-| subscriptionInitialPosition| string, one of["Latest","Earliest"] | No |
-
+| `codec`      | string, one of ["plain","json"] | No |
+| `topics`      | array | Yes |
+| `subscriptionName`      | string | Yes |
+| `consumerName`      | string | No |
+| `subscriptionType`      | string, one of["Shared","Exclusive","Failover","Key_shared"] | No |
+| `subscriptionInitialPosition` | string, one of["Latest","Earliest"] | No |
+| `enable_asynchronous_acknowledgements` | boolean (default: false) | No |
+| `enable_negative_acknowledgements` | boolean (default: true) | No |
+| `enable_batch_receive` | boolean (default: false) | No |
+| `batch_max_num_bytes` | int (default: 1048576) | No |
+| `batch_max_num_messages` | int (default: 100) | No |
+| `batch_timeout_milliseconds` | int (default: 1000) | No |
+| `batch_index_acknowledgement_enabled` | boolean (default: false) | No |
+| `receiver_queue_size` | int (default: 1000) | No |
+| `max_total_receiver_queue_size_across_partitions` | int (default: 50000) | No |
+| `pool_mesages` | boolean (default: false) | No |
+| `auto_update_partitions` | boolean (default: true) | No |
+| `auto_update_partitions_interval_seconds` | int (default: 60) | No |
+| `enable_tls` | boolean (default: false) | No |
+| `allow_tls_insecure_connection` | boolean (default: false) | No |
+| `enable_tls_hostname_verification` | boolean (default: true) | No |
+| `tls_trust_store_path` | string | No |
+| `tls_trust_store_password` | string | No |
+| `tls_client_cert_file_path` | string | No |
+| `tls_client_key_file_path` | string | No |
+| `tls_trust_certs_file_path` | string | No |
+| `auth_plugin_class_name` | string | No |
+| `ciphers` | string | No |
+| `protocols` | string | No |
 
 # Example
 
