@@ -154,8 +154,14 @@ public class Pulsar implements Input {
     private static final PluginConfigSpec<String> CONFIG_TLS_TRUST_CERTS_FILE_PATH =
             PluginConfigSpec.stringSetting("tls_trust_certs_file_path","");
 
+    private static final PluginConfigSpec<Boolean> CONFIG_ENABLE_TOKEN =
+            PluginConfigSpec.booleanSetting("enable_token",false);
+
     private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN_CLASS_NAME =
             PluginConfigSpec.stringSetting("auth_plugin_class_name",authPluginClassName);
+
+    private static final PluginConfigSpec<String> CONFIG_AUTH_PLUGIN_PARAMS_STRING =
+            PluginConfigSpec.stringSetting("auth_plugin_params_String","");
 
     private static final PluginConfigSpec<List<Object>> CONFIG_CIPHERS =
             PluginConfigSpec.arraySetting("ciphers", Collections.singletonList(ciphers), false, false);
@@ -180,7 +186,12 @@ public class Pulsar implements Input {
             String subscriptionType = config.get(CONFIG_SUBSCRIPTION_TYPE);
             String subscriptionInitialPosition = config.get(CONFIG_SUBSCRIPTION_INITIAL_POSITION);
             boolean enableTls = config.get(CONFIG_ENABLE_TLS);
-            if (enableTls) {
+            boolean enableToken = config.get(CONFIG_ENABLE_TOKEN);
+
+            if(enableTls && enableToken){
+                logger.error("Unable to Tls and Token authentication at the same time");
+                throw new IllegalStateException("Unable to Tls and Token authentication at the same time，enable_tls => true && enable_token => true" );
+            } else if (enableTls) {
                 // pulsar TLS
                 Boolean allowTlsInsecureConnection = config.get(CONFIG_ALLOW_TLS_INSECURE_CONNECTION);
                 Boolean enableTlsHostnameVerification = config.get(CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION);
@@ -191,8 +202,8 @@ public class Pulsar implements Input {
                         cipherList -> cipherList.forEach(cipher -> cipherSet.add(String.valueOf(cipher))));
 
                 Set<String> protocolSet = new HashSet<>();
-                 Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
-                         protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
+                Optional.ofNullable(config.get(CONFIG_PROTOCOLS)).ifPresent(
+                        protocolList -> protocolList.forEach(protocol -> protocolSet.add(String.valueOf(protocol))));
 
                 // Since tls with trust store was supported previously check if client cert path is supplied in the
                 // configuration. If a client cert not was supplied then proceed with JKS, otherwise look for file
@@ -247,6 +258,12 @@ public class Pulsar implements Input {
                              .build();
                     logger.info("TLS Pulsar client successfully created with file-system cert/key pair");
                 }
+            } else if (enableToken) {
+                // pulsar Token
+                client = PulsarClient.builder()
+                        .serviceUrl(serviceUrl)
+                        .authentication(config.get(CONFIG_AUTH_PLUGIN_CLASS_NAME),config.get(CONFIG_AUTH_PLUGIN_PARAMS_STRING))
+                        .build();
             } else {
                 client = PulsarClient.builder()
                         .serviceUrl(serviceUrl)
@@ -346,7 +363,7 @@ public class Pulsar implements Input {
             pulsarConsumer.close();
             client.close();
         } catch (PulsarClientException e) {
-            e.printStackTrace();
+            logger.error("close pulsar client exception ", e);
         }
     }
 
@@ -490,7 +507,10 @@ public class Pulsar implements Input {
                 CONFIG_TLS_TRUST_CERTS_FILE_PATH,
                 CONFIG_AUTH_PLUGIN_CLASS_NAME,
                 CONFIG_CIPHERS,
-                CONFIG_PROTOCOLS
+                CONFIG_PROTOCOLS,
+                CONFIG_AUTH_PLUGIN_CLASS_NAME,
+                CONFIG_ENABLE_TOKEN,
+                CONFIG_AUTH_PLUGIN_PARAMS_STRING
         );
     }
 
@@ -498,6 +518,5 @@ public class Pulsar implements Input {
     public String getId() {
         return this.id;
     }
-
 
 }
