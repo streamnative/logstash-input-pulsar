@@ -1,7 +1,6 @@
-:plugin: example
+:plugin: pulsar
 :type: input
 :default_codec: plain
-// Update header with plugin name and default codec
 
 ///////////////////////////////////////////
 START - GENERATED VARIABLES, DO NOT EDIT!
@@ -16,100 +15,180 @@ END - GENERATED VARIABLES, DO NOT EDIT!
 
 [id="plugins-{type}s-{plugin}"]
 
-=== Example input plugin
+=== Pulsar input plugin
 
 include::{include_path}/plugin_header.asciidoc[]
 
 ==== Description
 
-Add plugin description here
+Read events from an https://pulsar.apache.org/[Apache Pulsar] cluster.
+This plugin uses Pulsar Client 4.0.9 to consume messages from one or more Pulsar topics
+and feed them into the Logstash pipeline.
 
-// Format anchors and links to support generated ids for versioning
-// Sample anchor: [id="plugins-{type}s-{plugin}-setting_name"]
-// Sample link: <<plugins-{type}s-{plugin}-setting_name>>
+Messages can be decoded as plain text (placed in the `message` field) or as JSON
+(mapped directly into event fields).
 
 [id="plugins-{type}s-{plugin}-options"]
-==== Example Input Configuration Options
+==== Pulsar Input Configuration Options
 
-[cols="<,<,<",options="header",]
+[cols="<,<,<,<",options="header",]
 |=======================================================================
-|Setting |Input type|Required
-| <<plugins-{type}s-{plugin}-a_setting_name>> |<<boolean,boolean>>|No
-| <<plugins-{type}s-{plugin}-another_setting_name>> |<<hash,hash>>|No
-| <<plugins-{type}s-{plugin}-setting_name_3>> |<<string,string>>|No
-| <<plugins-{type}s-{plugin}-setting_name_4>> |<<number,number>>|No
-| <<plugins-{type}s-{plugin}-setting_name_5>> |<<array,array>>|No
-| <<plugins-{type}s-{plugin}-setting_name_6>> |<<bytes,bytes>>|No
-| <<plugins-{type}s-{plugin}-setting_name_7>> |<<path,path>>|No
-| <<plugins-{type}s-{plugin}-setting_name_8>> |<<password,password>>|No
+|Setting |Input type|Required|Default
+| <<plugins-{type}s-{plugin}-serviceUrl>> |<<string,string>>|No|`pulsar://localhost:6650`
+| <<plugins-{type}s-{plugin}-topics>> |<<array,array>>|Yes|
+| <<plugins-{type}s-{plugin}-subscriptionName>> |<<string,string>>|Yes|
+| <<plugins-{type}s-{plugin}-consumerName>> |<<string,string>>|No|
+| <<plugins-{type}s-{plugin}-subscriptionType>> |<<string,string>>|No|`Shared`
+| <<plugins-{type}s-{plugin}-subscriptionInitialPosition>> |<<string,string>>|No|`Latest`
+| <<plugins-{type}s-{plugin}-codec>> |<<string,string>>|No|`plain`
+| <<plugins-{type}s-{plugin}-enable_tls>> |<<boolean,boolean>>|No|`false`
+| <<plugins-{type}s-{plugin}-tls_trust_store_path>> |<<string,string>>|No|`""`
+| <<plugins-{type}s-{plugin}-tls_trust_store_password>> |<<string,string>>|No|`""`
+| <<plugins-{type}s-{plugin}-enable_tls_hostname_verification>> |<<boolean,boolean>>|No|`true`
+| <<plugins-{type}s-{plugin}-allow_tls_insecure_connection>> |<<boolean,boolean>>|No|`false`
+| <<plugins-{type}s-{plugin}-protocols>> |<<array,array>>|No|`["TLSv1.2"]`
+| <<plugins-{type}s-{plugin}-ciphers>> |<<array,array>>|No|_(see description)_
+| <<plugins-{type}s-{plugin}-auth_plugin_class_name>> |<<string,string>>|No|`""`
+| <<plugins-{type}s-{plugin}-auth_params>> |<<string,string>>|No|`""`
 |=======================================================================
 
-[id="plugins-{type}s-{plugin}-a_setting_name"]
-===== `a_setting_name` 
+[id="plugins-{type}s-{plugin}-serviceUrl"]
+===== `serviceUrl`
+
+  * Value type is <<string,string>>
+  * Default value is `"pulsar://localhost:6650"`
+
+The Pulsar service URL. Use `pulsar://` for plaintext connections or `pulsar+ssl://` for TLS.
+
+[id="plugins-{type}s-{plugin}-topics"]
+===== `topics`
+
+  * Value type is <<array,array>>
+  * There is no default value for this setting.
+  * Required
+
+A list of Pulsar topic names to subscribe to (e.g., `["persistent://public/default/my-topic"]`).
+
+[id="plugins-{type}s-{plugin}-subscriptionName"]
+===== `subscriptionName`
+
+  * Value type is <<string,string>>
+  * There is no default value for this setting.
+  * Required
+
+The name of the Pulsar subscription.
+
+[id="plugins-{type}s-{plugin}-consumerName"]
+===== `consumerName`
+
+  * Value type is <<string,string>>
+  * There is no default value for this setting.
+
+An optional name for the Pulsar consumer instance.
+
+[id="plugins-{type}s-{plugin}-subscriptionType"]
+===== `subscriptionType`
+
+  * Value type is <<string,string>>
+  * Default value is `"Shared"`
+
+The Pulsar subscription type. One of: `Exclusive`, `Failover`, `Shared`, `Key_Shared`.
+
+[id="plugins-{type}s-{plugin}-subscriptionInitialPosition"]
+===== `subscriptionInitialPosition`
+
+  * Value type is <<string,string>>
+  * Default value is `"Latest"`
+
+Where to start reading when no existing subscription cursor is found.
+One of: `Latest`, `Earliest`.
+
+[id="plugins-{type}s-{plugin}-codec"]
+===== `codec`
+
+  * Value type is <<string,string>>
+  * Default value is `"plain"`
+
+How to decode messages. `plain` places the message body in the `message` field.
+`json` parses the message body as JSON and maps fields into the Logstash event
+(falls back to `plain` on parse errors).
+
+[id="plugins-{type}s-{plugin}-enable_tls"]
+===== `enable_tls`
+
+  * Value type is <<boolean,boolean>>
+  * Default value is `false`
+
+Set to `true` to enable TLS authentication using a JKS keystore.
+
+[id="plugins-{type}s-{plugin}-tls_trust_store_path"]
+===== `tls_trust_store_path`
+
+  * Value type is <<string,string>>
+  * Default value is `""`
+
+Path to the JKS trust store file. Required when `enable_tls` is `true`.
+
+[id="plugins-{type}s-{plugin}-tls_trust_store_password"]
+===== `tls_trust_store_password`
+
+  * Value type is <<string,string>>
+  * Default value is `""`
+
+Password for the JKS trust store.
+
+[id="plugins-{type}s-{plugin}-enable_tls_hostname_verification"]
+===== `enable_tls_hostname_verification`
 
   * Value type is <<boolean,boolean>>
   * Default value is `true`
 
-Add description here
+Whether to verify the hostname in the TLS certificate.
 
-[id="plugins-{type}s-{plugin}-another_setting_name"]
-===== `another_setting_name` 
+[id="plugins-{type}s-{plugin}-allow_tls_insecure_connection"]
+===== `allow_tls_insecure_connection`
 
-  * Value type is <<hash,hash>>
-  * Default value is `{}`
+  * Value type is <<boolean,boolean>>
+  * Default value is `false`
 
-Add description here
+Allow the Pulsar client to connect to brokers with untrusted TLS certificates.
 
-[id="plugins-{type}s-{plugin}-setting_name_3"]
-===== `setting_name_3` 
-
-  * Value type is <<string,string>>
-  * Default value is `{}`
-
-Add description here
-
-[id="plugins-{type}s-{plugin}-setting_name_4"]
-===== `setting_name_4` 
-
-  * Value type is <<number,number>>
-  * Default value is `0`
-
-Add description here
-
-[id="plugins-{type}s-{plugin}-setting_name_5"]
-===== `setting_name_5` 
+[id="plugins-{type}s-{plugin}-protocols"]
+===== `protocols`
 
   * Value type is <<array,array>>
-  * Default value is {}
+  * Default value is `["TLSv1.2"]`
 
-Add description here
+List of TLS protocol versions to allow.
 
-[id="plugins-{type}s-{plugin}-setting_name_6"]
-===== `setting_name_6` 
+[id="plugins-{type}s-{plugin}-ciphers"]
+===== `ciphers`
 
-  * Value type is <<bytes,bytes>>
-  * Default value is {}
+  * Value type is <<array,array>>
+  * Default value includes `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256`,
+    `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384`, `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256`,
+    `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384`
 
-Add description here
+List of TLS cipher suites to allow.
 
-[id="plugins-{type}s-{plugin}-setting_name_7"]
-===== `setting_name_7` 
+[id="plugins-{type}s-{plugin}-auth_plugin_class_name"]
+===== `auth_plugin_class_name`
 
-  * Value type is <<path,path>>
-  * Default value is {}
+  * Value type is <<string,string>>
+  * Default value is `""`
 
-Add description here
+The fully qualified class name of the Pulsar authentication plugin.
+For example, `org.apache.pulsar.client.impl.auth.AuthenticationToken`.
+Used when `enable_tls` is `false`.
 
-[id="plugins-{type}s-{plugin}-setting_name_8"]
-===== `setting_name_8` 
+[id="plugins-{type}s-{plugin}-auth_params"]
+===== `auth_params`
 
-  * Value type is <<password,password>>
-  * Default value is {}
+  * Value type is <<string,string>>
+  * Default value is `""`
 
-Add description here
-
-// The full list of Value Types is here: 
-// https://www.elastic.co/guide/en/logstash/current/configuration-file-structure.html
+Authentication parameters as a string (e.g., `token:<your-token>`).
+Used together with `auth_plugin_class_name`.
 
 [id="plugins-{type}s-{plugin}-common-options"]
 include::{include_path}/{type}.asciidoc[]

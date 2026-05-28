@@ -226,8 +226,16 @@ public class Pulsar implements Input {
 
     private void closePulsarConsumer() {
         try {
-            pulsarConsumer.close();
-            client.close();
+            if (pulsarConsumer != null) {
+                pulsarConsumer.close();
+            }
+        } catch (PulsarClientException e) {
+            logger.error("close pulsar consumer exception ", e);
+        }
+        try {
+            if (client != null) {
+                client.close();
+            }
         } catch (PulsarClientException e) {
             logger.error("close pulsar client exception ", e);
         }
@@ -251,19 +259,19 @@ public class Pulsar implements Input {
             Message<byte[]> message = null;
             String msgString = null;
             Gson gson = new Gson();
-            Type gsonType = new TypeToken<Map>(){}.getType();
+            Type gsonType = new TypeToken<Map<String, Object>>(){}.getType();
             while (!stopped) {
                 try {
                     // Block and wait until a single message is available
                     message = pulsarConsumer.receive(1000, TimeUnit.MILLISECONDS);
-                    if(message == null){
+                    if (message == null) {
                         continue;
                     }
                     msgString = new String(message.getData());
 
                     if (config.get(CONFIG_CODEC).equals(CODEC_JSON)) {
                         try {
-                            Map map = gson.fromJson(msgString, gsonType);
+                            Map<String, Object> map = gson.fromJson(msgString, gsonType);
                             consumer.accept(map);
                         } catch (Exception e) {
                             // json parse exception
@@ -280,24 +288,29 @@ public class Pulsar implements Input {
                         consumer.accept(Collections.singletonMap("message", msgString));
                     }
 
-
                     // Acknowledge the message so that it can be
                     // deleted by the message broker
                     pulsarConsumer.acknowledge(message);
                 } catch (Exception e) {
-
+                    if (stopped) {
+                        break;
+                    }
                     // Message failed to process, redeliver later
                     logger.error("consume exception ", e);
                     if (message != null) {
-                        pulsarConsumer.negativeAcknowledge(message);
+                        try {
+                            pulsarConsumer.negativeAcknowledge(message);
+                        } catch (Exception ne) {
+                            logger.error("failed to negatively acknowledge message", ne);
+                        }
                         logger.error("message is {}:{}", message.getKey(), msgString);
                     }
                 }
-
             }
         } catch (PulsarClientException e) {
             logger.error("pulsar client exception ", e);
         } finally {
+            closePulsarConsumer();
             stopped = true;
             done.countDown();
         }
@@ -306,7 +319,6 @@ public class Pulsar implements Input {
     @Override
     public void stop() {
         stopped = true; // set flag to request cooperative stop of input
-        closePulsarConsumer();
     }
 
     @Override
@@ -326,8 +338,14 @@ public class Pulsar implements Input {
                 CONFIG_CONSUMER_NAME,
                 CONFIG_CODEC,
                 CONFIG_AUTH_PLUGIN,
-                // Pulsar Token Config
-                CONFIG_AUTH_PARAMS
+                CONFIG_AUTH_PARAMS,
+                CONFIG_ENABLE_TLS,
+                CONFIG_ALLOW_TLS_INSECURE_CONNECTION,
+                CONFIG_ENABLE_TLS_HOSTNAME_VERIFICATION,
+                CONFIG_TLS_TRUST_STORE_PATH,
+                CONFIG_TLS_TRUST_STORE_PASSWORD,
+                CONFIG_CIPHERS,
+                CONFIG_PROTOCOLS
         );
     }
 

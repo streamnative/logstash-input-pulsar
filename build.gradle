@@ -1,7 +1,31 @@
 import java.nio.file.Files
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING
 
-apply plugin: 'java'
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath "org.yaml:snakeyaml:2.2"
+    }
+}
+
+plugins {
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
+    id 'java'
+}
+
+ext {
+    shadowGradlePluginVersion = '7.1.2'
+}
+
+// load versions.yml from core before loading rubyUtils.gradle
+import org.yaml.snakeyaml.Yaml
+
+def versionsFile = file(LOGSTASH_CORE_PATH + "/../versions.yml")
+gradle.ext.versions = new Yaml().load(versionsFile.text)
+
 apply from: LOGSTASH_CORE_PATH + "/../rubyUtils.gradle"
 
 // ===========================================================================
@@ -12,51 +36,39 @@ version                    "${file("VERSION").text.trim()}" // read from require
 description                = "Logstash Pulsar input implementation"
 pluginInfo.licenses        = ['Apache-2.0'] // list of SPDX license IDs
 pluginInfo.longDescription = "This gem is a Logstash plugin required to be installed on top of the Logstash core pipeline using \$LS_HOME/bin/logstash-plugin install gemname. This gem is not a stand-alone program"
-pluginInfo.authors         = ['@rockybean']
-pluginInfo.email           = ['bwei@streamnative.io']
-pluginInfo.homepage        = "http://blank"
+pluginInfo.authors         = ['Elasticsearch']
+pluginInfo.email           = ['info@elastic.co']
+pluginInfo.homepage        = "http://www.elastic.co/guide/en/logstash/current/index.html"
 pluginInfo.pluginType      = "input"
 pluginInfo.pluginClass     = "Pulsar"
 pluginInfo.pluginName      = "pulsar" // must match the @LogstashPlugin annotation in the main plugin class
 // ===========================================================================
 
-
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
-
-buildscript {
-    repositories {
-        mavenCentral()
-        jcenter()
-    }
-
-    dependencies {
-        classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.4'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
     }
 }
+
 
 repositories {
     mavenCentral()
 }
 
-apply plugin: 'com.github.johnrengelman.shadow'
 
 shadowJar {
-    exclude "**/Log4j2Plugins.dat"
-    archiveClassifier = null
-
+    archiveClassifier.set('')
 }
 
 dependencies {
-    implementation 'org.apache.logging.log4j:log4j-core:2.17.2'
-    implementation 'org.apache.logging.log4j:log4j-api:2.17.2'
-    implementation 'org.apache.pulsar:pulsar-client:2.10.2'
+    implementation 'org.apache.logging.log4j:log4j-core:2.23.1'
+    implementation 'org.apache.logging.log4j:log4j-api:2.23.1'
+    implementation 'org.apache.pulsar:pulsar-client:4.0.9'
     implementation 'com.google.code.gson:gson:2.9.0'
-    implementation files(LOGSTASH_CORE_PATH + '/../logstash-core/build/libs/logstash-core-7.17.4.jar')
+    implementation fileTree(dir: LOGSTASH_CORE_PATH, include: "**/logstash-core.jar")
 
-    testImplementation 'junit:junit:4.12'
-    testImplementation 'org.jruby:jruby-complete:9.1.14.0'
-
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation "org.jruby:jruby-complete:${gradle.ext.versions.jruby.version}"
 }
 
 clean {
@@ -103,7 +115,7 @@ tasks.register("removeObsoleteJars") {
 }
 
 tasks.register("gem"){
-    dependsOn([downloadAndInstallJRuby, removeObsoleteJars, vendor, generateRubySupportFiles])
+    dependsOn = [downloadAndInstallJRuby, removeObsoleteJars, vendor, generateRubySupportFiles]
     doLast {
         buildGem(projectDir, buildDir, pluginInfo.pluginFullName() + ".gemspec")
     }
